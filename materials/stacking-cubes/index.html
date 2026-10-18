@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>쌓기나무 개수 구하기</title>
 <!-- 교재 목록 페이지에 보이는 설명 -->
-<meta name="description" content="위·앞·오른쪽에서 본 모양을 보고 쌓기나무 개수의 최대·최소를 3D 그림과 숫자로 단계별로 구합니다.">
+<meta name="description" content="위·앞·오른쪽에서 본 모양을 보고 쌓기나무 개수의 최대·최소를 구합니다. 깎아내며 풀기와 쌓아 올리며 풀기, 두 가지 방법을 3D 그림과 숫자로 단계별로 보여 줍니다.">
 <style>
 /* =========================================================
    색상 토큰: 밝은 모드 기본값
@@ -43,7 +43,6 @@ body{margin:0;background:var(--bg);color:var(--text);
   line-height:1.5}
 [hidden]{display:none !important}
 h1{font-size:20px;font-weight:600;margin:0}
-h2{font-size:17px;font-weight:600;margin:0 0 10px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
 button{font:inherit;color:var(--text);background:transparent;border:1px solid var(--line2);border-radius:10px;
   min-height:44px;padding:0 14px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -81,8 +80,12 @@ button.primary{background:var(--accent-fill);color:var(--on-accent);border-color
    ========================================================= */
 #pageSolve{display:flex;flex-direction:column;gap:10px;
   padding:10px 12px calc(10px + env(safe-area-inset-bottom));min-height:100vh;min-height:100dvh}
-.bar{display:flex;align-items:center;gap:8px}
-.bar h1{flex:1;text-align:center}
+.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* 풀이 방법 고르기 (깎아내며 / 쌓아 올리며) */
+.seg{display:flex;margin:0 auto;border:1px solid var(--line2);border-radius:10px;overflow:hidden}
+.seg button{border:0;border-radius:0;min-height:42px;font-size:15px}
+.seg button + button{border-left:1px solid var(--line2)}
+.seg button.on{background:var(--accent-fill);color:var(--on-accent);font-weight:600}
 .sgrid{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);
   grid-template-areas:"views" "solve" "numbers"}
 #cViews{grid-area:views}#cSolve{grid-area:solve}#cNumbers{grid-area:numbers}
@@ -90,14 +93,17 @@ button.primary{background:var(--accent-fill);color:var(--on-accent);border-color
 .mini .vc{flex:1 1 140px;padding:8px 6px;gap:4px}
 .mini .vc.on{padding:7px 5px}
 .mini .vc .t{font-size:14px}
+.mini .vc.secret .t{color:var(--muted)}
 .mg{display:grid;grid-template-columns:repeat(3,var(--mc));gap:3px}
-.mcell{width:var(--mc);height:var(--mc);border-radius:4px;border:1px dashed var(--line2)}
+.mcell{width:var(--mc);height:var(--mc);border-radius:4px;border:1px dashed var(--line2);
+  display:flex;align-items:center;justify-content:center}
 .mcell.on{background:var(--cube);border:1px solid var(--cube-line)}
+/* 아직 공개되지 않은 그림: 회색 칸 + 가운데 물음표 */
+.mcell.q{background:var(--soft);border:1px solid transparent;color:var(--muted);font-weight:600;font-size:calc(var(--mc) * 0.7)}
 .mg + .base{width:calc(var(--mc) * 3 + 10px)}
-.mg ~ .cl3{grid-template-columns:repeat(3,var(--mc));gap:3px;font-size:11px;white-space:nowrap}
 /* 3D 영역 */
 #cSolve{display:flex;flex-direction:column;gap:8px}
-#wrap{position:relative;width:100%;height:clamp(240px,34vh,420px);border-radius:12px;background:var(--soft);
+#wrap{position:relative;width:100%;height:clamp(240px,31vh,420px);border-radius:12px;background:var(--soft);
   touch-action:none;cursor:grab;overflow:hidden}
 #wrap .nogl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;padding:16px;text-align:center}
 #cap{font-size:16px;margin:0;min-height:48px}
@@ -110,15 +116,23 @@ button.primary{background:var(--accent-fill);color:var(--on-accent);border-color
 .pn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 8px 10px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
 .pn.on{border:2px solid var(--accent);padding:7px 7px 9px}
 .pn .t{font-weight:600;font-size:14px}
-.pn .s{font-size:13px;color:var(--muted);min-height:20px;text-align:center}
+/* keep-all: 한글 단어("12개" 등) 중간에서 줄이 바뀌지 않게 함 */
+.pn .s{font-size:13px;color:var(--muted);min-height:20px;text-align:center;max-width:calc(var(--nc) * 4 + 12px);word-break:keep-all}
 .g{display:grid;grid-template-columns:repeat(4,var(--nc));gap:4px}
-.cl{width:var(--nc);height:var(--nc);display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:13px;font-weight:600}
+.cl{width:var(--nc);height:var(--nc);display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:13px;font-weight:600;white-space:nowrap}
 .lb{width:var(--nc);height:var(--nc);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;border-radius:6px}
+/* "3층 → 1층"처럼 바뀌는 칸: 위에 지운 높이(취소선), 아래에 새 높이 */
+.tr{display:flex;flex-direction:column;align-items:center;line-height:1.05;font-size:max(10px,calc(var(--nc) * 0.31))}
+.tr s{font-weight:500;opacity:.75}
+/* 바깥 숫자 "최대 / 3층" 두 줄 표기 */
+.mx{display:flex;flex-direction:column;align-items:center;line-height:1.05;white-space:nowrap}
+.mx small{font-size:max(10px,calc(var(--nc) * 0.29));font-weight:500}
+.mx span{font-size:max(11px,calc(var(--nc) * 0.37))}
 .arr{font-size:18px;color:var(--muted)}
 .sum{margin-top:10px;padding:8px;border-radius:12px;background:var(--accent-bg);color:var(--accent);font-size:16px;font-weight:600;text-align:center}
 .sum.wait{background:var(--soft);color:var(--muted);font-weight:400}
 /* 휴대폰처럼 좁은 화면: 패널 세로 정렬 */
-@media (max-width:560px){.panels{flex-direction:column}.arr{transform:rotate(90deg)}}
+@media (max-width:560px){.panels{flex-direction:column}.arr{transform:rotate(90deg)}.seg{width:100%}.seg button{flex:1}}
 
 /* ---------------------------------------------------------
    가로로 긴 화면(가로 아이패드 등): 풀기 화면을 2단으로
@@ -135,7 +149,7 @@ button.primary{background:var(--accent-fill);color:var(--on-accent);border-color
   .panels{flex-wrap:nowrap;gap:6px}
   .arr{font-size:14px}
   /* 칸이 커진 만큼 글자도 비례해서 키움 */
-  .cl{font-size:calc(var(--nc) * 0.42)}
+  .cl{font-size:calc(var(--nc) * 0.38)}
   .lb{font-size:calc(var(--nc) * 0.5)}
   .g{gap:5px}
   .pn{gap:8px}
@@ -197,16 +211,19 @@ button.primary{background:var(--accent-fill);color:var(--on-accent);border-color
 </div>
 
 <!-- =========================================================
-     2단계 화면: 풀기
+     2단계 화면: 풀기 (두 가지 풀이 방법을 위쪽 버튼으로 오갈 수 있음)
      ========================================================= -->
 <div id="pageSolve" hidden>
   <div class="bar">
     <button id="bBack">← 문제 바꾸기</button>
-    <h1>쌓기나무 풀기</h1>
+    <div class="seg" role="tablist">
+      <button id="mCarve" role="tab">① 깎아내며 풀기</button>
+      <button id="mBuild" role="tab">② 쌓아 올리며 풀기</button>
+    </div>
     <button id="bRand2">랜덤 새 문제</button>
   </div>
   <div class="sgrid">
-    <!-- 문제 그림 (읽기 전용) -->
+    <!-- 문제 그림 (읽기 전용, 단계에 따라 하나씩 공개) -->
     <div class="card mini" id="cViews">
       <div class="views">
         <div class="vc" id="vTop"><span class="t">위에서 본 모양</span><div class="mg" id="mvTop"></div><span class="h">위쪽 줄 = 뒤</span></div>
@@ -225,19 +242,19 @@ button.primary{background:var(--accent-fill);color:var(--on-accent);border-color
         <button class="primary" id="bNext">다음 →</button>
         <span id="dots"></span>
         <div class="stats">
-          <div class="mcard"><p class="l">남은 개수</p><p class="v" id="cnt">0</p></div>
-          <div class="mcard"><p class="l">지울 개수</p><p class="v" id="del" style="color:var(--bad-text)">0</p></div>
+          <div class="mcard"><p class="l" id="lCnt">남은 개수</p><p class="v" id="cnt">0</p></div>
+          <div class="mcard"><p class="l" id="lDel">지울 개수</p><p class="v" id="del">0</p></div>
         </div>
       </div>
     </div>
     <!-- 숫자 풀이 -->
     <div class="card" id="cNumbers">
       <div class="panels">
-        <div class="pn" id="p1"><span class="t">① 칸 확인</span><div class="g" id="g1"></div><span class="s" id="s1"></span></div>
+        <div class="pn" id="p1"><span class="t" id="pt1"></span><div class="g" id="g1"></div><span class="s" id="s1"></span></div>
         <span class="arr">→</span>
-        <div class="pn" id="p2"><span class="t">② 숫자 적기</span><div class="g" id="g2"></div><span class="s" id="s2"></span></div>
+        <div class="pn" id="p2"><span class="t" id="pt2"></span><div class="g" id="g2"></div><span class="s" id="s2"></span></div>
         <span class="arr">→</span>
-        <div class="pn" id="p3"><span class="t">③ 작은 수 적기</span><div class="g" id="g3"></div><span class="s" id="s3"></span></div>
+        <div class="pn" id="p3"><span class="t" id="pt3"></span><div class="g" id="g3"></div><span class="s" id="s3"></span></div>
       </div>
       <div class="sum" id="sum"></div>
     </div>
@@ -255,9 +272,10 @@ button.primary{background:var(--accent-fill);color:var(--on-accent);border-color
      ※ 오른쪽에서 본 그림은 왼쪽이 앞 줄이므로, 그림의 j번째 기둥 = S[2-j]
    ========================================================= */
 let OCC, F, S;
-let P = null;     // 풀고 있는 문제의 계산 결과
-let step = 0;     // 현재 풀이 단계
-let solving = false;  // 지금 풀기 화면이 보이는지 (3D 그리기 여부 결정)
+let P = null;          // 풀고 있는 문제의 계산 결과
+let step = 0;          // 현재 풀이 단계
+let mode = 'carve';    // 풀이 방법: 'carve'=깎아내며 풀기, 'build'=쌓아 올리며 풀기
+let solving = false;   // 지금 풀기 화면이 보이는지 (3D 그리기 여부 결정)
 
 /* 예제 문제 정의 */
 const EX1 = { occ:[[1,0,0],[1,1,0],[1,1,1]], f:[3,1,1], s:[3,2,1] };  // 답이 하나로 정해지는 문제 (9개)
@@ -406,86 +424,52 @@ function minArrangement(){
 /* 풀이에 필요한 값들을 한 번에 계산 */
 function compute(){
   const sum = a => a.flat().reduce((x, y) => x + y, 0);
+  const cnt = (a, lv) => a.flat().filter(v => v >= lv).length;   // lv층 이상인 칸 수 = lv층에 놓인 개수
   const k  = OCC.flat().filter(Boolean).length;
   const AF = OCC.map(row => row.map((o, c) => o ? Math.min(3, F[c]) : 0));  // 앞에서 깎은 뒤 높이
   const AS = AF.map((row, r) => row.map(v => Math.min(v, S[r])));            // 옆에서도 깎은 뒤 높이 = 최대 배치
   const mn = minArrangement();
-  return { k, AF, AS, MIN: mn.h, pair: mn.hl, start: 3 * k, nF: sum(AF), maxN: sum(AS), minN: sum(mn.h) };
-}
-
-/* 풀이 단계 수: 최대와 최소가 다르면 '최소' 단계를 하나 더 보여줌 */
-const stepCount = () => (P && P.minN < P.maxN) ? 6 : 5;
-
-/* =========================================================
-   화면 전환: 문제 만들기 ↔ 풀기
-   ========================================================= */
-function openSolve(){
-  const err = validate();
-  if (err){  // 그림이 서로 맞지 않으면 풀기 화면으로 넘어가지 않고 이유를 보여 줌
-    const msg = document.getElementById('msg');
-    msg.className = 'msg bad'; msg.textContent = err;
-    msg.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    return;
-  }
-  P = compute();
-  step = 0;
-  document.getElementById('pageMake').hidden = true;
-  document.getElementById('pageSolve').hidden = false;
-  solving = true;
-  window.scrollTo(0, 0);
-  cur = { ...VIEWS.iso }; tgt = { ...VIEWS.iso };   // 카메라를 처음 시점으로
-  renderMini();
-  buildCubes();
-  render();
-}
-function openMake(){
-  solving = false;
-  document.getElementById('pageSolve').hidden = true;
-  document.getElementById('pageMake').hidden = false;
-  update();
-  window.scrollTo(0, 0);
-}
-
-/* 풀기 화면의 작은 문제 그림(읽기 전용) 그리기 */
-function renderMini(){
-  const cell = on => `<div class="mcell${on ? ' on' : ''}"></div>`;
-  let t = '';
-  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) t += cell(OCC[r][c]);
-  document.getElementById('mvTop').innerHTML = t;
-  const col = (arr, idx) => { let s = ''; for (let lv = 3; lv >= 1; lv--) for (let j = 0; j < 3; j++) s += cell(arr[idx(j)] >= lv); return s; };
-  document.getElementById('mvFront').innerHTML = col(F, i => i);
-  document.getElementById('mvRight').innerHTML = col(S, j => 2 - j);
-  // 그림 아래 한 줄 설명: 높이를 숫자로 함께 보여 줌
-  document.getElementById('hFront').textContent = `왼쪽부터 ${F.join(', ')}`;
-  document.getElementById('hRight').textContent = `앞 줄부터 ${S[2]}, ${S[1]}, ${S[0]}`;
+  return { k, AF, AS, MIN: mn.h, pair: mn.hl, start: 3 * k, nF: sum(AF), maxN: sum(AS), minN: sum(mn.h),
+           n2: cnt(AS, 2), n3: cnt(AS, 3) };   // 쌓아 올리기: 2층·3층에 올릴 수 있는 개수
 }
 
 /* =========================================================
-   단계별 설명 문장
+   두 가지 풀이 방법의 단계 정의
+   ---------------------------------------------------------
+   ① 깎아내며 풀기 (carve): 위 모양 칸마다 3층씩 다 쌓고 → 앞 모양에 맞지 않는 것 지우기
+      → 오른쪽 모양에 맞지 않는 것 지우기. 정보를 얻을 때마다 '불가능한 것'을 없앰
+      단계: 0 다 쌓기 / 1 앞 공개·표시 / 2 앞 기준 지움 / 3 오른쪽 공개·표시 / 4 지움 / (5 최소)
+   ② 쌓아 올리며 풀기 (build): 1층을 깔고 → 앞·오른쪽 숫자를 적은 뒤
+      → 2층, 3층을 '올릴 수 있는 칸'에만 한 층씩 올림 (층별로 세기)
+      단계: 0 1층 깔기 / 1 앞 공개 / 2 오른쪽 공개 / 3 2층 올리기 / 4 3층 올리기 / (5 최소)
    ========================================================= */
-function caption(){
-  const rv = [S[2], S[1], S[0]].join(', ');  // 오른쪽 그림은 왼쪽(앞 줄)부터
-  const d1 = P.start - P.nF, d2 = P.nF - P.maxN;
-  switch (step){
-    case 0: return `① 위에서 본 ${P.k}칸에 일단 모두 3층씩 쌓아요. ${P.k} × 3 = ${P.start}개. 칸마다 '3'을 적은 것과 같아요.`;
-    case 1: return d1 > 0
-      ? `② 앞에서 봐요. 앞 모양은 왼쪽부터 ${F.join(', ')}. 그보다 위로 튀어나온 빨간 ${d1}개는 있으면 안 돼요.`
-      : `② 앞에서 봐요. 앞 모양은 왼쪽부터 ${F.join(', ')}. 튀어나온 것이 없어서 지울 게 없어요.`;
-    case 2: return `지우면 ${P.nF}개. 칸 숫자 = 3과 앞 숫자 중 작은 수 → 결국 '앞 숫자'가 돼요.`;
-    case 3: return d2 > 0
-      ? `③ 오른쪽에서 봐요. 오른쪽 모양은 왼쪽(앞 줄)부터 ${rv}. 튀어나온 빨간 ${d2}개를 찾아요.`
-      : `③ 오른쪽에서 봐요. 오른쪽 모양은 왼쪽(앞 줄)부터 ${rv}. 튀어나온 것이 없어요.`;
-    case 4: return P.minN === P.maxN
-      ? `남은 것은 ${P.maxN}개. 칸 숫자 = 앞 숫자와 옆 숫자 중 작은 수. 이 문제는 답이 하나로 정해져요.`
-      : `남은 것은 ${P.maxN}개. 이것이 가장 많이 쌓은 경우(최대)예요. 다음 단계에서 최소도 볼게요.`;
-    case 5: return `④ 최소: 앞 숫자와 옆 숫자가 같은 줄끼리 주황 칸 하나에서 짝지어 한 번에 맞추고, 나머지 칸은 1개씩만 놓아요. → ${P.minN}개.`;
-  }
+const stepCount = () => (P && P.minN < P.maxN) ? 6 : 5;   // 최대·최소가 다르면 '최소' 단계 추가
+const isLast = () => step === stepCount() - 1;
+
+/* 앞/오른쪽 그림이 공개되는 단계 (그 전까지는 물음표로 가려 둠) */
+const revF = () => step >= 1;
+const revS = () => mode === 'carve' ? step >= 3 : step >= 2;
+
+/* 쌓아 올리기에서 단계별 칸 높이 */
+function buildHeight(r, c){
+  if (!OCC[r][c]) return 0;
+  if (step <= 2) return 1;                       // 1층만 깔린 상태
+  if (step === 3) return Math.min(P.AS[r][c], 2); // 2층까지 올림
+  if (step === 4) return P.AS[r][c];              // 3층까지 올림 = 최대
+  return P.MIN[r][c];                             // 최소 배치
 }
+/* 이번 단계에서 새로 올린 층인지 (주황색으로 표시) */
+const isNewLayer = (z) => (step === 3 && z === 1) || (step === 4 && z === 2);
 
 /* 각 쌓기나무(칸 r,c의 z층)가 지금 단계에서 어떤 상태인지
-   keep=남김, mark=지울 것(빨강), min=최소 배치에서 높이 쌓은 칸(주황), gone=없음 */
+   keep=있음, mark=지울 것(빨강), new=새로 올림(주황), min=최소 배치에서 높이 쌓은 칸(주황), gone=없음 */
 function cubeState(r, c, z){
   if (!P || !OCC[r][c]) return 'gone';
+  if (mode === 'build'){
+    if (z >= buildHeight(r, c)) return 'gone';
+    if (step === 5) return P.MIN[r][c] > 1 ? 'min' : 'keep';
+    return isNewLayer(z) ? 'new' : 'keep';
+  }
   switch (step){
     case 0: return 'keep';
     case 1: return z < P.AF[r][c] ? 'keep' : 'mark';
@@ -496,6 +480,107 @@ function cubeState(r, c, z){
   }
 }
 
+/* 단계별 설명 문장 */
+function caption(){
+  const rv = [S[2], S[1], S[0]].join(', ');  // 오른쪽 그림은 왼쪽(앞 줄)부터
+  const uniq = P.minN === P.maxN;
+  if (mode === 'build'){
+    switch (step){
+      case 0: return `① 위에서 본 ${P.k}칸에 1층을 하나씩 깔아요. 지금 ${P.k}개. 위 모양은 '어디에 놓는지'만 알려 줘요.`;
+      case 1: return `② 앞에서 본 모양이 공개됐어요. 왼쪽부터 ${F.join(', ')}. 세로줄마다 이 높이보다 높이 쌓을 수 없어요. 아래에 적어요.`;
+      case 2: return `오른쪽에서 본 모양이 공개됐어요. 앞 줄부터 ${rv}. 가로줄마다 이 높이보다 높이 쌓을 수 없어요. 오른쪽에 적어요.`;
+      case 3: return P.n2 > 0
+        ? `③ 2층 올리기: 앞 숫자와 옆 숫자가 둘 다 2 이상인 칸에만 올릴 수 있어요. 주황색 ${P.n2}개를 올려요.`
+        : `③ 2층 올리기: 앞 숫자와 옆 숫자가 둘 다 2 이상인 칸이 없어서 2층은 없어요.`;
+      case 4: {
+        const head = P.n3 > 0 ? `3층 올리기: 둘 다 3인 칸에 ${P.n3}개를 올려요. ` : `3층 올리기: 둘 다 3인 칸이 없어요. `;
+        const sum = `1층 ${P.k} + 2층 ${P.n2}${P.n3 ? ` + 3층 ${P.n3}` : ''} = ${P.maxN}개.`;
+        return head + sum + (uniq ? ' 답이 하나로 정해져요.' : ' 이것이 가장 많이 쌓은 경우(최대)예요.');
+      }
+      case 5: return `④ 최소: 앞·옆 모양을 만드는 데 꼭 필요한 칸(주황)만 높이 쌓고 나머지는 1층만 둬요. 숫자가 같은 앞 줄과 옆 줄은 한 칸으로 함께 해결해요. → ${P.minN}개.`;
+    }
+  }
+  /* 깎아내며 풀기: '부분 정보로 불확실한 부분을 하나씩 없애 가는' 과정
+     - 위 그림만으로는 상자가 놓인 칸만 알고 각 칸이 몇 층인지는 모름
+       → 가능한 가장 많은 경우(3층)를 가정하고 시작
+     - 앞·오른쪽 그림이 하나씩 주어질 때마다, 그 정보로 '있을 수 없는' 상자를 지움 */
+  const d1 = P.start - P.nF, d2 = P.nF - P.maxN;
+  switch (step){
+    case 0: return `① 위에서 본 그림으로는 ${P.k}칸에 상자가 있다는 것만 알고, 각 칸이 몇 층인지는 몰라요. 그래서 가장 많을 때인 3층씩 있다고 가정하고 시작해요. ${P.k} × 3 = ${P.start}개.`;
+    case 1: return d1 > 0
+      ? `② 앞에서 본 그림이 새로 주어졌어요. 왼쪽부터 ${F.join(', ')}. 이 정보로 보면 그보다 높은 빨간 ${d1}개는 있을 수 없어요.`
+      : `② 앞에서 본 그림이 새로 주어졌어요. 왼쪽부터 ${F.join(', ')}. 이 정보로 지울 수 있는 상자는 없어요.`;
+    case 2: return `있을 수 없는 상자를 지우니 ${P.nF}개. 각 칸은 '3층과 앞 숫자 중 낮은 쪽'까지만 가능해요. 불확실한 부분이 줄었어요.`;
+    case 3: return d2 > 0
+      ? `③ 오른쪽에서 본 그림이 새로 주어졌어요. 앞 줄부터 ${rv}. 이 정보로 보면 빨간 ${d2}개도 있을 수 없어요.`
+      : `③ 오른쪽에서 본 그림이 새로 주어졌어요. 앞 줄부터 ${rv}. 이 정보로 더 지울 수 있는 상자는 없어요.`;
+    case 4: return uniq
+      ? `남은 것은 ${P.maxN}개. 세 정보를 모두 쓰니 불확실한 부분이 다 없어져서, 답이 하나로 정해져요.`
+      : `남은 ${P.maxN}개는 '있을 수도 있는' 상자를 모두 남긴 경우(최대)예요. 세 정보로도 아직 정해지지 않은 상자가 있어요.`;
+    case 5: return `④ 최소: 정해지지 않은 상자 중 빼도 세 그림이 그대로인 것은 모두 빼요. 같은 숫자의 앞 줄·옆 줄은 주황 칸 하나로 함께 맞추고, 나머지 칸은 1층만 남겨요. → ${P.minN}개.`;
+  }
+}
+
+/* =========================================================
+   화면 전환: 문제 만들기 ↔ 풀기, 풀이 방법 바꾸기
+   ========================================================= */
+function openSolve(){
+  const err = validate();
+  if (err){  // 그림이 서로 맞지 않으면 풀기 화면으로 넘어가지 않고 이유를 보여 줌
+    const msg = document.getElementById('msg');
+    msg.className = 'msg bad'; msg.textContent = err;
+    msg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  P = compute();
+  document.getElementById('pageMake').hidden = true;
+  document.getElementById('pageSolve').hidden = false;
+  solving = true;
+  window.scrollTo(0, 0);
+  setMode('carve');   // 새 문제는 항상 '깎아내며 풀기'부터
+}
+function openMake(){
+  solving = false;
+  document.getElementById('pageSolve').hidden = true;
+  document.getElementById('pageMake').hidden = false;
+  update();
+  window.scrollTo(0, 0);
+}
+/* 풀이 방법을 바꾸고 1단계부터 다시 시작 */
+function setMode(m){
+  mode = m;
+  step = 0;
+  document.getElementById('mCarve').classList.toggle('on', m === 'carve');
+  document.getElementById('mBuild').classList.toggle('on', m === 'build');
+  document.getElementById('mCarve').setAttribute('aria-selected', m === 'carve');
+  document.getElementById('mBuild').setAttribute('aria-selected', m === 'build');
+  cur = { ...VIEWS.iso }; tgt = { ...VIEWS.iso };   // 카메라를 처음 시점으로
+  buildCubes();
+  render();
+}
+
+/* 풀기 화면의 작은 문제 그림(읽기 전용). 아직 공개되지 않은 그림은 물음표로 가림 */
+function renderMini(){
+  const cell = on => `<div class="mcell${on ? ' on' : ''}"></div>`;
+  const secret = () => Array.from({ length: 9 }, (_, i) => `<div class="mcell q">${i === 4 ? '?' : ''}</div>`).join('');
+  let t = '';
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) t += cell(OCC[r][c]);
+  document.getElementById('mvTop').innerHTML = t;
+  const col = (arr, idx) => { let s = ''; for (let lv = 3; lv >= 1; lv--) for (let j = 0; j < 3; j++) s += cell(arr[idx(j)] >= lv); return s; };
+
+  // 앞에서 본 모양: 공개 단계 전에는 가림
+  const fOn = revF();
+  document.getElementById('mvFront').innerHTML = fOn ? col(F, i => i) : secret();
+  document.getElementById('hFront').textContent = fOn ? `왼쪽부터 ${F.join(', ')}` : '다음 단계에서 공개';
+  document.getElementById('vFront').classList.toggle('secret', !fOn);
+
+  // 오른쪽에서 본 모양: 공개 단계 전에는 가림
+  const sOn = revS();
+  document.getElementById('mvRight').innerHTML = sOn ? col(S, j => 2 - j) : secret();
+  document.getElementById('hRight').textContent = sOn ? `앞 줄부터 ${S[2]}, ${S[1]}, ${S[0]}` : (fOn ? '다음 단계에서 공개' : '나중에 공개');
+  document.getElementById('vRight').classList.toggle('secret', !sOn);
+}
+
 /* =========================================================
    숫자 쓰기 세 패널 그리기
    ========================================================= */
@@ -503,12 +588,17 @@ const ST_OK   = 'background:var(--ok-bg);color:var(--ok-text);border:1px solid v
 const ST_BAD  = 'background:var(--bad-bg);color:var(--bad-text);border:1px solid var(--bad-line)';
 const ST_WARN = 'background:var(--warn-bg);color:var(--warn-text);border:1px solid var(--warn-line)';
 const ST_NO   = 'border:1px dashed var(--line2)';
+const fl = n => `${n}층`;                                                        // 칸 안 높이 표기: "3층"
+const change = (a, b) => `<span class="tr"><s>${fl(a)}</s><span>${fl(b)}</span></span>`;  // "3층 → 1층" (위: 지운 높이)
 
-/* 바깥 숫자(앞=아래, 옆=오른쪽) 한 칸 */
+/* 바깥 숫자(앞=아래, 옆=오른쪽) 한 칸
+   - 앞·오른쪽 그림의 높이는 그 줄에서 쌓을 수 있는 '최대 높이'이므로
+     위에 작게 "최대", 아래에 "3층"처럼 두 줄로 표시 */
 function outLabel(v, show, hi, kind){
   const col = kind === 'f' ? 'var(--warn-text)' : 'var(--pro-text)';
   const bg  = kind === 'f' ? 'var(--warn-bg)'   : 'var(--pro-bg)';
-  return `<div class="lb" style="${hi ? 'background:' + bg + ';' : ''}color:${show ? col : 'var(--muted)'}">${show ? v : ''}</div>`;
+  const txt = show ? `<span class="mx"><small>최대</small><span>${fl(v)}</span></span>` : '';
+  return `<div class="lb" style="${hi ? 'background:' + bg + ';' : ''}color:${show ? col : 'var(--muted)'}">${txt}</div>`;
 }
 /* 3x3 칸 + 오른쪽 옆 숫자 + 아래 앞 숫자로 이루어진 4x4 격자 */
 function gridHTML(cellFn, showF, showS, hiF, hiS){
@@ -520,38 +610,67 @@ function gridHTML(cellFn, showF, showS, hiF, hiS){
   for (let c = 0; c < 3; c++) h += outLabel(F[c], showF, hiF, 'f');
   return h + '<div></div>';
 }
+
 function renderPanels(){
-  // ① 칸 확인: 위 모양 칸마다 3
-  document.getElementById('g1').innerHTML = gridHTML((r, c) => OCC[r][c] ? ['3', ST_OK] : ['', ST_NO], false, false);
-  document.getElementById('s1').textContent = `칸마다 3층씩 = ${P.start}개`;
+  const build = mode === 'build';
+  // 패널 제목: 풀이 방법에 따라 다름
+  const titles = build ? ['① 1층 깔기', '② 숫자 적기', '③ 층별로 올리기'] : ['① 3층이라 가정', '② 숫자 적기', '③ 작은 수 적기'];
+  titles.forEach((t, i) => document.getElementById('pt' + (i + 1)).textContent = t);
 
-  // ② 숫자 적기: 앞 숫자는 1단계부터, 옆 숫자는 3단계부터 나타남
-  document.getElementById('g2').innerHTML = gridHTML((r, c) => OCC[r][c] ? ['', ST_OK] : ['', ST_NO],
-    step >= 1, step >= 3, step === 1, step === 3);
-  document.getElementById('s2').textContent = step === 0 ? '아직 안 봤어요' : step < 3 ? '아래 = 앞 높이' : '아래 = 앞, 오른쪽 = 옆';
+  // ① 시작 상태: 깎아내기는 칸마다 3층, 쌓아 올리기는 칸마다 1층
+  const h0 = build ? 1 : 3;
+  document.getElementById('g1').innerHTML = gridHTML((r, c) => OCC[r][c] ? [fl(h0), ST_OK] : ['', ST_NO], false, false);
+  document.getElementById('s1').textContent = build ? `1층 = ${P.k}개` : `모두 3층 가정 = ${P.start}개`;
 
-  // ③ 작은 수 적기: 단계에 따라 칸 숫자가 바뀜 (줄어드는 칸은 "3→1"처럼 빨강)
-  document.getElementById('g3').innerHTML = gridHTML((r, c) => {
-    if (!OCC[r][c]) return ['', ST_NO];
-    const af = P.AF[r][c], as = P.AS[r][c];
-    switch (step){
-      case 0: return ['3', ST_OK];
-      case 1: return af < 3 ? [`3→${af}`, ST_BAD] : ['3', ST_OK];
-      case 2: return [String(af), ST_OK];
-      case 3: return as < af ? [`${af}→${as}`, ST_BAD] : [String(af), ST_OK];
-      case 4: return [String(as), ST_OK];
-      case 5: return [String(P.MIN[r][c]), P.MIN[r][c] > 1 ? ST_WARN : ST_OK];
-    }
-  }, step >= 1, step >= 3, false, false);
+  // ② 숫자 적기: 앞·오른쪽 그림이 공개될 때 바깥 숫자가 나타남 (공개된 단계에는 배경 강조)
+  const fOn = revF(), sOn = revS();
+  const hiF = step === 1, hiS = build ? step === 2 : step === 3;
+  document.getElementById('g2').innerHTML = gridHTML((r, c) => OCC[r][c] ? ['', ST_OK] : ['', ST_NO], fOn, sOn, hiF, hiS);
+  document.getElementById('s2').textContent = !fOn ? '아직 몰라요' : !sOn ? '아래 = 앞에서 본 최대' : '바깥 = 최대 높이';
 
-  // ③ 아래 덧셈식: 지금 단계가 끝났을 때의 칸 숫자들을 더함
-  const pick = [() => 3, (r, c) => P.AF[r][c], (r, c) => P.AF[r][c], (r, c) => P.AS[r][c], (r, c) => P.AS[r][c], (r, c) => P.MIN[r][c]][step];
-  const vals = [];
-  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) if (OCC[r][c]) vals.push(pick(r, c));
-  document.getElementById('s3').textContent = vals.join('+') + ' = ' + vals.reduce((a, b) => a + b, 0) + '개';
+  // ③ 단계에 따라 칸 높이가 바뀜
+  let cellFn, heightOf;
+  if (build){
+    heightOf = (r, c) => buildHeight(r, c);
+    cellFn = (r, c) => {
+      if (!OCC[r][c]) return ['', ST_NO];
+      const h = buildHeight(r, c);
+      const grew = (step === 3 && h === 2) || (step === 4 && h === 3) || (step === 5 && h > 1);  // 이번에 올린 칸
+      return [fl(h), grew ? ST_WARN : ST_OK];
+    };
+  } else {
+    heightOf = [() => 3, (r, c) => P.AF[r][c], (r, c) => P.AF[r][c], (r, c) => P.AS[r][c], (r, c) => P.AS[r][c], (r, c) => P.MIN[r][c]][step];
+    cellFn = (r, c) => {
+      if (!OCC[r][c]) return ['', ST_NO];
+      const af = P.AF[r][c], as = P.AS[r][c];
+      switch (step){
+        case 0: return [fl(3), ST_OK];
+        case 1: return af < 3 ? [change(3, af), ST_BAD] : [fl(3), ST_OK];
+        case 2: return [fl(af), ST_OK];
+        case 3: return as < af ? [change(af, as), ST_BAD] : [fl(af), ST_OK];
+        case 4: return [fl(as), ST_OK];
+        case 5: return [fl(P.MIN[r][c]), P.MIN[r][c] > 1 ? ST_WARN : ST_OK];
+      }
+    };
+  }
+  document.getElementById('g3').innerHTML = gridHTML(cellFn, fOn, sOn, false, false);
+
+  // ③ 아래 계산식
+  const hs = [];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) if (OCC[r][c]) hs.push(heightOf(r, c));
+  const total = hs.reduce((a, b) => a + b, 0);
+  if (build){
+    // 층별로 세기: 1층 몇 개 + 2층 몇 개 + 3층 몇 개
+    const L = lv => hs.filter(h => h >= lv).length;
+    const parts = [`1층 ${L(1)}`]; if (L(2)) parts.push(`2층 ${L(2)}`); if (L(3)) parts.push(`3층 ${L(3)}`);
+    // "= 12개"는 붙여서 한 덩어리로 (줄바꿈 시 "=" 앞에서만 넘어가도록   사용)
+    document.getElementById('s3').textContent = parts.join(' + ') + ` = ${total}개`;
+  } else {
+    document.getElementById('s3').textContent = hs.join('+') + ` = ${total}개`;
+  }
 
   // 지금 단계에 해당하는 패널에 테두리 표시
-  const panelOf = [1, 2, 3, 2, 3, 3];
+  const panelOf = build ? [1, 2, 2, 3, 3, 3] : [1, 2, 3, 2, 3, 3];
   [1, 2, 3].forEach(i => document.getElementById('p' + i).classList.toggle('on', panelOf[step] === i));
 }
 
@@ -560,45 +679,60 @@ function renderPanels(){
    ========================================================= */
 function render(){
   if (!P) return;
-  // 3D 쌓기나무 상태 반영 (3D가 없어도 개수는 같은 규칙으로 셈)
-  let n = 0, del = 0;
+  const build = mode === 'build';
+  // 개수 세기 (3D가 없어도 같은 규칙으로 셈)
+  let n = 0, extra = 0;
   for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) for (let z = 0; z < 3; z++){
-    const s = cubeState(r, c, z); if (s !== 'gone') n++; if (s === 'mark') del++;
+    const s = cubeState(r, c, z);
+    if (s !== 'gone') n++;
+    if (s === 'mark' || s === 'new') extra++;
   }
+  // 3D 쌓기나무 상태 반영
   cubes.forEach(k => {
     const s = cubeState(k.r, k.c, k.z);
-    k.target = s === 'gone' ? 0 : s === 'mark' ? 0.75 : 1;
-    k.color = s === 'mark' ? 'red' : s === 'min' ? 'amber' : 'teal';
+    const target = s === 'gone' ? 0 : s === 'mark' ? 0.75 : 1;
+    if (build && k.target === 0 && target > 0) k.dy = 1.6;   // 쌓아 올리기: 새로 생긴 쌓기나무는 위에서 떨어지듯 내려옴
+    k.target = target;
+    k.color = s === 'mark' ? 'red' : (s === 'new' || s === 'min') ? 'amber' : 'teal';
   });
   applyColors();
+  document.getElementById('lCnt').textContent = build ? '쌓은 개수' : '남은 개수';
+  document.getElementById('lDel').textContent = build ? '새로 올린 개수' : '지울 개수';
   document.getElementById('cnt').textContent = n;
-  document.getElementById('del').textContent = del;
+  const del = document.getElementById('del');
+  del.textContent = extra;
+  del.style.color = build ? 'var(--warn-text)' : 'var(--bad-text)';
   document.getElementById('cap').textContent = caption();
   document.getElementById('dots').textContent = Array.from({ length: stepCount() }, (_, i) => i === step ? '●' : '○').join(' ');
 
-  // 지금 보고 있는 방향의 문제 그림에 테두리 표시
-  const viewOf = ['vTop', 'vFront', '', 'vRight', '', ''];
+  // 문제 그림: 공개 여부 반영 + 이번 단계에 새로 본 그림에 테두리
+  renderMini();
+  const viewOf = build ? ['vTop', 'vFront', 'vRight', '', '', ''] : ['vTop', 'vFront', '', 'vRight', '', ''];
   ['vTop', 'vFront', 'vRight'].forEach(id => document.getElementById(id).classList.toggle('on', viewOf[step] === id));
 
   // 3D 카메라를 단계에 맞는 방향으로 이동
-  const camOf = ['iso', 'front', 'iso', 'right', 'iso', 'iso'];
+  const camOf = build ? ['iso', 'front', 'right', 'iso', 'iso', 'iso'] : ['iso', 'front', 'iso', 'right', 'iso', 'iso'];
   setCamera(camOf[step]);
 
   renderPanels();
 
   // 정답은 마지막 단계에서 공개 (그 전에는 직접 생각해 보도록)
   const sum = document.getElementById('sum');
-  const last = step === stepCount() - 1;
-  sum.classList.toggle('wait', !last);
-  sum.textContent = !last ? '마지막 단계에서 정답이 나와요'
+  sum.classList.toggle('wait', !isLast());
+  sum.textContent = !isLast() ? '마지막 단계에서 정답이 나와요'
     : P.minN === P.maxN ? `정답: ${P.maxN}개` : `정답: 최소 ${P.minN}개 ~ 최대 ${P.maxN}개`;
-  document.getElementById('bNext').textContent = last ? '처음부터 ↺' : '다음 →';
+  // 마지막 단계의 '다음' 버튼: 깎아내기 → 쌓아 올리기 풀이로, 쌓아 올리기 → 처음부터
+  document.getElementById('bNext').textContent = !isLast() ? '다음 →' : build ? '처음부터 ↺' : '쌓아서 풀기 →';
 }
-/* 다음 단계로. 마지막 단계에서 누르면 처음으로 돌아감 */
+/* 다음/이전 단계로 */
 function go(d){
   if (!P) return;
-  if (d > 0 && step === stepCount() - 1) step = 0;
-  else step = Math.max(0, Math.min(stepCount() - 1, step + d));
+  if (d > 0 && isLast()){
+    if (mode === 'carve') setMode('build');   // 깎아내기를 다 보면 다음 페이지(쌓아 올리기)로
+    else { step = 0; buildCubes(); render(); }
+    return;
+  }
+  step = Math.max(0, Math.min(stepCount() - 1, step + d));
   render();
 }
 
@@ -706,14 +840,16 @@ function init3D(){
   };
   new ResizeObserver(resize).observe(wrap); resize();
 
-  // 매 프레임: 카메라와 투명도를 목표값으로 부드럽게 이동 (풀기 화면이 보일 때만 그림)
+  // 매 프레임: 카메라·투명도·떨어지는 위치를 목표값으로 부드럽게 이동 (풀기 화면이 보일 때만 그림)
   const loop = () => {
     requestAnimationFrame(loop);
     if (!solving) return;
     for (const k in cur) cur[k] += (tgt[k] - cur[k]) * 0.12;
     cubes.forEach(k => {
       k.op += (k.target - k.op) * 0.15;
+      k.dy += (0 - k.dy) * 0.14;
       k.mesh.material.opacity = k.op; k.edge.material.opacity = k.op;
+      k.mesh.position.y = k.z + 0.5 + k.dy; k.edge.position.y = k.mesh.position.y;
       const v = k.op > 0.02; k.mesh.visible = v; k.edge.visible = v;
     });
     camera.fov = cur.fov; camera.updateProjectionMatrix();
@@ -727,7 +863,8 @@ function init3D(){
   loop();
 }
 
-/* 문제를 풀기 시작할 때 쌓기나무를 새로 만듦: 위 모양 칸마다 3층씩 */
+/* 풀이를 시작할 때 쌓기나무를 새로 만듦: 위 모양 칸마다 3층 자리까지 준비해 두고
+   단계에 따라 보이거나(투명도 1) 사라지게(투명도 0) 함 */
 function buildCubes(){
   if (!has3D){ cubes = []; return; }
   cubes.forEach(k => { cubeGroup.remove(k.mesh); cubeGroup.remove(k.edge); k.mesh.material.dispose(); k.edge.material.dispose(); });
@@ -739,7 +876,7 @@ function buildCubes(){
     const edge = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: COLORS.teal.edge, transparent: true, opacity: 0 }));
     edge.position.copy(mesh.position);
     cubeGroup.add(mesh); cubeGroup.add(edge);
-    cubes.push({ r, c, z, mesh, edge, op: 0, target: 1, color: 'teal' });
+    cubes.push({ r, c, z, mesh, edge, op: 0, target: 0, dy: 0, color: 'teal' });
   }
 }
 /* 상태에 맞게 색 바꾸기 */
@@ -758,6 +895,8 @@ document.getElementById('bClear').onclick = () => { OCC = [[0,0,0],[0,0,0],[0,0,
 document.getElementById('bSolve').onclick = openSolve;
 document.getElementById('bBack').onclick = openMake;
 document.getElementById('bRand2').onclick = () => { randomProblem(); openSolve(); };   // 풀기 화면에서 바로 새 문제
+document.getElementById('mCarve').onclick = () => setMode('carve');
+document.getElementById('mBuild').onclick = () => setMode('build');
 document.getElementById('bPrev').onclick = () => go(-1);
 document.getElementById('bNext').onclick = () => go(1);
 
