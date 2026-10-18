@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<!-- 모바일/태블릿 화면 폭에 맞추고, 노치 영역까지 화면을 씀 -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>쌓기나무 개수 구하기</title>
+<!-- 교재 목록 페이지에 보이는 설명 -->
+<meta name="description" content="위·앞·오른쪽에서 본 모양을 보고 쌓기나무 개수의 최대·최소를 3D 그림과 숫자로 단계별로 구합니다.">
+<style>
+/* =========================================================
+   색상 토큰: 밝은 모드 기본값
+   - 모든 색은 변수로 정의해 다크 모드에서 한 번에 바뀌도록 함
+   ========================================================= */
+:root{
+  --bg:#faf9f5; --card:#ffffff; --soft:#f1efe8; --text:#1f1e1d; --muted:#73726c;
+  --line:rgba(0,0,0,.12); --line2:rgba(0,0,0,.28);
+  --accent:#185FA5; --accent-bg:#E6F1FB; --accent-fill:#185FA5; --on-accent:#ffffff;
+  --ok-bg:#E1F5EE; --ok-text:#085041; --ok-line:#5DCAA5;
+  --bad-bg:#FCEBEB; --bad-text:#A32D2D; --bad-line:#F09595;
+  --warn-bg:#FAEEDA; --warn-text:#854F0B; --warn-line:#EF9F27;
+  --pro-bg:#EEEDFE; --pro-text:#534AB7;
+  --cube:#5DCAA5; --cube-line:#085041;
+  /* 칸 크기: --tb=입력 칸, --mc=풀기 화면의 작은 그림 칸, --nc=숫자 패널 칸 */
+  --tb:46px; --mc:22px; --nc:32px;
+}
+/* 기기 설정이 다크 모드일 때 색상 토큰을 어두운 값으로 교체 */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1f1e1d; --card:#2a2927; --soft:#34332f; --text:#f1efe8; --muted:#b4b2a9;
+    --line:rgba(255,255,255,.14); --line2:rgba(255,255,255,.32);
+    --accent:#85B7EB; --accent-bg:#0C447C; --accent-fill:#378ADD; --on-accent:#ffffff;
+    --ok-bg:#085041; --ok-text:#9FE1CB; --ok-line:#1D9E75;
+    --bad-bg:#791F1F; --bad-text:#F7C1C1; --bad-line:#E24B4A;
+    --warn-bg:#633806; --warn-text:#FAC775; --warn-line:#BA7517;
+    --pro-bg:#3C3489; --pro-text:#CECBF6;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+  line-height:1.5}
+[hidden]{display:none !important}
+h1{font-size:20px;font-weight:600;margin:0}
+h2{font-size:17px;font-weight:600;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+button{font:inherit;color:var(--text);background:transparent;border:1px solid var(--line2);border-radius:10px;
+  min-height:44px;padding:0 14px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button:active{transform:scale(.97)}
+button.primary{background:var(--accent-fill);color:var(--on-accent);border-color:transparent;font-weight:600}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* =========================================================
+   1단계 화면: 문제 만들기
+   ========================================================= */
+#pageMake{max-width:920px;margin:0 auto;padding:16px 16px calc(24px + env(safe-area-inset-bottom));
+  display:flex;flex-direction:column;gap:14px}
+.sub{color:var(--muted);font-size:14px;margin:4px 0 0}
+.views{display:flex;gap:10px;flex-wrap:wrap}
+.vc{flex:1 1 200px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 8px;
+  border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.vc.on{border:2px solid var(--accent);padding:11px 7px}
+.vc .t{font-weight:600;font-size:15px}
+.vc .h{font-size:12px;color:var(--muted);text-align:center}
+/* 입력용 칸(버튼) */
+.ed{display:grid;grid-template-columns:repeat(3,var(--tb));gap:6px}
+.tb{width:var(--tb);height:var(--tb);min-height:0;padding:0;border-radius:8px;border:1.5px dashed var(--line2);background:transparent}
+.tb.on{background:var(--cube);border:1.5px solid var(--cube-line)}
+.base{height:0;border-top:2px solid var(--line2);margin-top:-2px}
+.cl3{display:grid;gap:6px;font-size:12px;color:var(--muted);text-align:center}
+.ed + .base{width:calc(var(--tb) * 3 + 16px)}
+.ed ~ .cl3{grid-template-columns:repeat(3,var(--tb))}
+.msg{padding:10px 12px;border-radius:10px;font-size:14px}
+.msg.bad{background:var(--bad-bg);color:var(--bad-text)}
+.msg.ok{background:var(--ok-bg);color:var(--ok-text)}
+#bSolve{min-height:56px;font-size:18px;width:100%}
+
+/* =========================================================
+   2단계 화면: 풀기 (아이패드에서 한 화면에 모두 보이도록 높이를 화면에 맞춤)
+   ========================================================= */
+#pageSolve{display:flex;flex-direction:column;gap:10px;
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom));min-height:100vh;min-height:100dvh}
+.bar{display:flex;align-items:center;gap:8px}
+.bar h1{flex:1;text-align:center}
+.sgrid{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);
+  grid-template-areas:"views" "solve" "numbers"}
+#cViews{grid-area:views}#cSolve{grid-area:solve}#cNumbers{grid-area:numbers}
+/* 풀기 화면의 읽기 전용 작은 그림 */
+.mini .vc{flex:1 1 140px;padding:8px 6px;gap:4px}
+.mini .vc.on{padding:7px 5px}
+.mini .vc .t{font-size:14px}
+.mg{display:grid;grid-template-columns:repeat(3,var(--mc));gap:3px}
+.mcell{width:var(--mc);height:var(--mc);border-radius:4px;border:1px dashed var(--line2)}
+.mcell.on{background:var(--cube);border:1px solid var(--cube-line)}
+.mg + .base{width:calc(var(--mc) * 3 + 10px)}
+.mg ~ .cl3{grid-template-columns:repeat(3,var(--mc));gap:3px;font-size:11px;white-space:nowrap}
+/* 3D 영역 */
+#cSolve{display:flex;flex-direction:column;gap:8px}
+#wrap{position:relative;width:100%;height:clamp(240px,34vh,420px);border-radius:12px;background:var(--soft);
+  touch-action:none;cursor:grab;overflow:hidden}
+#wrap .nogl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;padding:16px;text-align:center}
+#cap{font-size:16px;margin:0;min-height:48px}
+.stats{display:flex;gap:6px;margin-left:auto}
+.mcard{background:var(--soft);border-radius:10px;padding:4px 10px;min-width:76px}
+.mcard p{margin:0}.mcard .l{font-size:11px;color:var(--muted)}.mcard .v{font-size:20px;font-weight:600;line-height:1.3}
+#dots{font-size:14px;color:var(--muted);letter-spacing:2px}
+/* 숫자 패널 */
+.panels{display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap}
+.pn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 8px 10px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.pn.on{border:2px solid var(--accent);padding:7px 7px 9px}
+.pn .t{font-weight:600;font-size:14px}
+.pn .s{font-size:13px;color:var(--muted);min-height:20px;text-align:center}
+.g{display:grid;grid-template-columns:repeat(4,var(--nc));gap:4px}
+.cl{width:var(--nc);height:var(--nc);display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:13px;font-weight:600}
+.lb{width:var(--nc);height:var(--nc);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;border-radius:6px}
+.arr{font-size:18px;color:var(--muted)}
+.sum{margin-top:10px;padding:8px;border-radius:12px;background:var(--accent-bg);color:var(--accent);font-size:16px;font-weight:600;text-align:center}
+.sum.wait{background:var(--soft);color:var(--muted);font-weight:400}
+/* 휴대폰처럼 좁은 화면: 패널 세로 정렬 */
+@media (max-width:560px){.panels{flex-direction:column}.arr{transform:rotate(90deg)}}
+
+/* ---------------------------------------------------------
+   가로로 긴 화면(가로 아이패드 등): 풀기 화면을 2단으로
+   - 왼쪽: 세 방향 그림 + 숫자 풀이
+   - 오른쪽: 3D (남은 높이를 모두 채움)
+   - 화면 높이에 딱 맞춰 스크롤 없이 한눈에 보이게 함
+   --------------------------------------------------------- */
+@media (min-width:900px){
+  /* 왼쪽 그림 칸 크기를 화면 크기에 비례해 키움
+     - --mc(문제 그림 칸): 화면 높이 5.4% 또는 너비 4% 중 작은 값 (최대 44px)
+     - --nc(숫자 칸): 세 패널이 왼쪽 열에 한 줄로 들어가도록 너비 2.9% 이하로 제한 (최대 44px) */
+  :root{--tb:52px;--mc:min(5.4vh,4vw,44px);--nc:min(2.9vw,5.6vh,44px)}
+  #pageSolve{height:100vh;height:100dvh;min-height:0}
+  .panels{flex-wrap:nowrap;gap:6px}
+  .arr{font-size:14px}
+  /* 칸이 커진 만큼 글자도 비례해서 키움 */
+  .cl{font-size:calc(var(--nc) * 0.42)}
+  .lb{font-size:calc(var(--nc) * 0.5)}
+  .g{gap:5px}
+  .pn{gap:8px}
+  .pn .t{font-size:16px}
+  .pn .s{font-size:14px}
+  .sum{font-size:18px;padding:10px;margin-top:14px}
+  .mg{gap:4px}
+  .mini .vc{gap:6px;padding:10px 6px}
+  .mini .vc.on{padding:9px 5px}
+  .mini .vc .t{font-size:15px}
+  .mini .vc .h{font-size:13px}
+  .mg + .base{width:calc(var(--mc) * 3 + 14px)}
+  /* 왼쪽 열을 조금 넓혀 숫자 패널을 더 크게 쓸 수 있게 함 */
+  .sgrid{flex:1;min-height:0;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);
+    grid-template-rows:auto minmax(0,1fr);grid-template-areas:"views solve" "numbers solve"}
+  #cNumbers{overflow:auto;display:flex;flex-direction:column;justify-content:center}
+  #cSolve{min-height:0}
+  #wrap{flex:1;height:auto;min-height:220px}
+}
+</style>
+</head>
+<body>
+
+<!-- =========================================================
+     1단계 화면: 문제 만들기
+     ========================================================= -->
+<div id="pageMake">
+  <div>
+    <h1>쌓기나무 문제 만들기</h1>
+    <p class="sub">위·앞·오른쪽에서 본 모양을 터치로 정한 뒤, 아래 버튼을 눌러 풀어 보세요.</p>
+  </div>
+  <div class="row">
+    <button id="bEx1">예제 1 (답 1개)</button>
+    <button id="bEx2">예제 2 (최대·최소)</button>
+    <button id="bRand">랜덤 문제</button>
+    <button id="bClear">모두 지우기</button>
+  </div>
+  <div class="views">
+    <div class="vc">
+      <span class="t">위에서 본 모양</span>
+      <div class="ed" id="edTop"></div>
+      <span class="h">칸을 눌러 켜고 끄기 · 위쪽 줄 = 뒤</span>
+    </div>
+    <div class="vc">
+      <span class="t">앞에서 본 모양</span>
+      <div class="ed" id="edFront"></div><div class="base"></div>
+      <div class="cl3"><span>왼쪽</span><span>가운데</span><span>오른쪽</span></div>
+      <span class="h">층을 눌러 높이 정하기</span>
+    </div>
+    <div class="vc">
+      <span class="t">오른쪽에서 본 모양</span>
+      <div class="ed" id="edRight"></div><div class="base"></div>
+      <div class="cl3"><span>앞 줄</span><span>가운데</span><span>뒤 줄</span></div>
+      <span class="h">왼쪽 = 앞 줄 (오른쪽에 서서 본 모습)</span>
+    </div>
+  </div>
+  <div class="msg" id="msg"></div>
+  <button class="primary" id="bSolve">이 문제 풀기 →</button>
+</div>
+
+<!-- =========================================================
+     2단계 화면: 풀기
+     ========================================================= -->
+<div id="pageSolve" hidden>
+  <div class="bar">
+    <button id="bBack">← 문제 바꾸기</button>
+    <h1>쌓기나무 풀기</h1>
+    <button id="bRand2">랜덤 새 문제</button>
+  </div>
+  <div class="sgrid">
+    <!-- 문제 그림 (읽기 전용) -->
+    <div class="card mini" id="cViews">
+      <div class="views">
+        <div class="vc" id="vTop"><span class="t">위에서 본 모양</span><div class="mg" id="mvTop"></div><span class="h">위쪽 줄 = 뒤</span></div>
+        <div class="vc" id="vFront"><span class="t">앞에서 본 모양</span><div class="mg" id="mvFront"></div><div class="base"></div>
+          <span class="h" id="hFront"></span></div>
+        <div class="vc" id="vRight"><span class="t">오른쪽에서 본 모양</span><div class="mg" id="mvRight"></div><div class="base"></div>
+          <span class="h" id="hRight"></span></div>
+      </div>
+    </div>
+    <!-- 3D 풀이 -->
+    <div class="card" id="cSolve">
+      <div id="wrap"></div>
+      <p id="cap"></p>
+      <div class="row">
+        <button id="bPrev">← 이전</button>
+        <button class="primary" id="bNext">다음 →</button>
+        <span id="dots"></span>
+        <div class="stats">
+          <div class="mcard"><p class="l">남은 개수</p><p class="v" id="cnt">0</p></div>
+          <div class="mcard"><p class="l">지울 개수</p><p class="v" id="del" style="color:var(--bad-text)">0</p></div>
+        </div>
+      </div>
+    </div>
+    <!-- 숫자 풀이 -->
+    <div class="card" id="cNumbers">
+      <div class="panels">
+        <div class="pn" id="p1"><span class="t">① 칸 확인</span><div class="g" id="g1"></div><span class="s" id="s1"></span></div>
+        <span class="arr">→</span>
+        <div class="pn" id="p2"><span class="t">② 숫자 적기</span><div class="g" id="g2"></div><span class="s" id="s2"></span></div>
+        <span class="arr">→</span>
+        <div class="pn" id="p3"><span class="t">③ 작은 수 적기</span><div class="g" id="g3"></div><span class="s" id="s3"></span></div>
+      </div>
+      <div class="sum" id="sum"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 3D 렌더링용 three.js (인터넷 연결 필요, 없으면 3D만 빠지고 나머지는 동작) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =========================================================
+   문제 상태
+   - OCC[r][c] : 위에서 본 모양 (r=0 뒤 줄, r=2 앞 줄 / c=0 왼쪽)
+   - F[c]      : 앞에서 본 높이 (왼쪽 세로줄부터)
+   - S[r]      : 각 가로줄(행)의 옆 높이 (0=뒤 줄, 1=가운데, 2=앞 줄)
+     ※ 오른쪽에서 본 그림은 왼쪽이 앞 줄이므로, 그림의 j번째 기둥 = S[2-j]
+   ========================================================= */
+let OCC, F, S;
+let P = null;     // 풀고 있는 문제의 계산 결과
+let step = 0;     // 현재 풀이 단계
+let solving = false;  // 지금 풀기 화면이 보이는지 (3D 그리기 여부 결정)
+
+/* 예제 문제 정의 */
+const EX1 = { occ:[[1,0,0],[1,1,0],[1,1,1]], f:[3,1,1], s:[3,2,1] };  // 답이 하나로 정해지는 문제 (9개)
+const EX2 = { occ:[[1,1,0],[1,1,1],[1,0,1]], f:[3,2,1], s:[2,3,1] };  // 최대 12개, 최소 10개
+
+/* 예제를 현재 문제로 불러오기 */
+function load(ex){
+  OCC = ex.occ.map(r => r.map(Boolean));
+  F = ex.f.slice();
+  S = ex.s.slice();
+  update();
+}
+
+/* 랜덤 문제: 칸마다 높이를 무작위로 정한 뒤, 거기서 세 방향 모양을 만들어 냄
+   (실제로 쌓은 모양에서 나온 그림이므로 항상 풀 수 있는 문제가 됨) */
+function randomProblem(){
+  let H;
+  do{
+    H = [0,1,2].map(() => [0,1,2].map(() => Math.random() < 0.6 ? 1 + Math.floor(Math.random()*3) : 0));
+  } while (H.flat().filter(v => v > 0).length < 3);   // 최소 3칸은 있도록
+  OCC = H.map(r => r.map(v => v > 0));
+  F = [0,1,2].map(c => Math.max(H[0][c], H[1][c], H[2][c]));  // 세로줄별 최고 높이 = 앞 모양
+  S = H.map(r => Math.max(...r));                               // 가로줄별 최고 높이 = 옆 모양
+  update();
+}
+
+/* =========================================================
+   1단계 화면: 입력 편집기
+   ========================================================= */
+function renderEditors(){
+  // 위에서 본 모양: 3x3 칸을 눌러 켜고 끔
+  const top = document.getElementById('edTop');
+  top.innerHTML = '';
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++){
+    const b = document.createElement('button');
+    b.className = 'tb' + (OCC[r][c] ? ' on' : '');
+    b.setAttribute('aria-label', `위 모양 ${r+1}행 ${c+1}열`);
+    b.onclick = () => { OCC[r][c] = !OCC[r][c]; update(); };
+    top.appendChild(b);
+  }
+  // 앞/오른쪽 모양: 3개 기둥 × 3층. 맨 위 행이 3층
+  buildColEditor('edFront', F, i => i, '앞 모양');
+  buildColEditor('edRight', S, j => 2 - j, '오른쪽 모양');  // 그림 왼쪽 기둥 = 앞 줄(S[2])
+}
+
+/* 기둥형 편집기 공통 함수
+   - arr: 높이 배열(F 또는 S), idx: 그림의 기둥 번호 → 배열 인덱스 변환
+   - k층을 누르면 높이를 k로, 이미 k가 맨 위층이면 k-1로 낮춤 (0층까지 가능) */
+function buildColEditor(id, arr, idx, name){
+  const el = document.getElementById(id);
+  el.innerHTML = '';
+  for (let lv = 3; lv >= 1; lv--) for (let j = 0; j < 3; j++){
+    const i = idx(j);
+    const b = document.createElement('button');
+    b.className = 'tb' + (arr[i] >= lv ? ' on' : '');
+    b.setAttribute('aria-label', `${name} ${j+1}번째 기둥 ${lv}층`);
+    b.onclick = () => { arr[i] = (arr[i] === lv) ? lv - 1 : lv; update(); };
+    el.appendChild(b);
+  }
+}
+
+/* 입력이 바뀔 때마다: 편집기를 다시 그리고, 세 그림이 맞는지 바로 알려 줌 */
+function update(){
+  renderEditors();
+  const err = validate();
+  const msg = document.getElementById('msg');
+  if (err){ msg.className = 'msg bad'; msg.textContent = err; return; }
+  const p = compute();
+  msg.className = 'msg ok';
+  msg.textContent = p.minN === p.maxN
+    ? '세 그림이 서로 맞아요. 풀어 볼 준비가 됐어요.'
+    : '세 그림이 서로 맞아요. 이 문제는 쌓는 방법이 여러 가지라 최대·최소를 함께 구해요.';
+}
+
+/* =========================================================
+   문제 검사: 세 그림이 서로 맞는지 확인하고, 안 맞으면 이유를 돌려줌
+   ========================================================= */
+const ROWN = ['뒤 줄','가운데 줄','앞 줄'];
+const COLN = ['왼쪽','가운데','오른쪽'];
+function validate(){
+  if (!OCC.flat().some(Boolean)) return '위에서 본 모양에 칸을 하나 이상 색칠해 주세요.';
+  // 세로줄: 위 모양에 칸이 있으면 앞 모양도 높이가 있어야 하고, 반대도 마찬가지
+  for (let c = 0; c < 3; c++){
+    const has = OCC[0][c] || OCC[1][c] || OCC[2][c];
+    if (has && F[c] === 0) return `위 모양 ${COLN[c]} 세로줄에 칸이 있는데, 앞 모양 ${COLN[c]} 기둥이 비어 있어요.`;
+    if (!has && F[c] > 0) return `앞 모양 ${COLN[c]} 기둥에 쌓기나무가 있는데, 위 모양 ${COLN[c]} 세로줄은 비어 있어요.`;
+  }
+  // 가로줄: 같은 방식으로 오른쪽 모양과 비교
+  for (let r = 0; r < 3; r++){
+    const has = OCC[r].some(Boolean);
+    if (has && S[r] === 0) return `위 모양 ${ROWN[r]}에 칸이 있는데, 오른쪽 모양 ${ROWN[r]} 기둥이 비어 있어요.`;
+    if (!has && S[r] > 0) return `오른쪽 모양 ${ROWN[r]} 기둥에 쌓기나무가 있는데, 위 모양 ${ROWN[r]}은 비어 있어요.`;
+  }
+  // 칸마다 '작은 수'로 가장 높이 쌓아 봤을 때 앞/옆 모양이 그대로 나오는지 확인
+  const M = OCC.map((row, r) => row.map((o, c) => o ? Math.min(F[c], S[r]) : 0));
+  for (let c = 0; c < 3; c++){
+    if (Math.max(M[0][c], M[1][c], M[2][c]) !== F[c])
+      return `앞 모양 ${COLN[c]} 기둥의 높이 ${F[c]}을(를) 만들 수 없어요. 그 세로줄 칸들의 오른쪽 모양 높이가 모두 더 낮아요.`;
+  }
+  for (let r = 0; r < 3; r++){
+    if (Math.max(...M[r]) !== S[r])
+      return `오른쪽 모양 ${ROWN[r]}의 높이 ${S[r]}을(를) 만들 수 없어요. 그 가로줄 칸들의 앞 모양 높이가 모두 더 낮아요.`;
+  }
+  return null;  // 문제 없음
+}
+
+/* =========================================================
+   최소 개수 배치 구하기
+   - 모든 칸은 일단 1개
+   - 같은 높이 v(2 이상)를 가진 '앞 기둥'과 '옆 줄'을 한 칸에서 짝지으면
+     그 칸 하나만 v층으로 쌓아 두 조건을 한 번에 만족 → 짝을 최대한 많이 만듦
+   - 짝이 없는 기둥/줄은 조건을 깨지 않는 칸 하나에만 그 높이로 쌓음
+   ========================================================= */
+function minArrangement(){
+  const h  = OCC.map(r => r.map(o => o ? 1 : 0));
+  const hl = OCC.map(r => r.map(() => 0));   // 짝지어진 칸 표시
+  const usedC = {}, usedR = {};
+  for (let v = 3; v >= 2; v--){
+    const cols = [0,1,2].filter(c => F[c] === v);
+    const rows = [0,1,2].filter(r => S[r] === v);
+    const matchR = {};   // 행 → 짝지어진 열
+    // 이분 매칭(증가 경로 탐색): 열 c를 어떤 행과 짝지을 수 있는지 시도
+    const tryCol = (c, seen) => {
+      for (const r of rows){
+        if (OCC[r][c] && !seen[r]){
+          seen[r] = true;
+          if (matchR[r] === undefined || tryCol(matchR[r], seen)){ matchR[r] = c; return true; }
+        }
+      }
+      return false;
+    };
+    cols.forEach(c => tryCol(c, {}));
+    for (const r in matchR){ const c = matchR[r]; h[r][c] = v; hl[r][c] = 1; usedC[c] = 1; usedR[r] = 1; }
+  }
+  // 짝이 없는 앞 기둥: 옆 높이가 충분한 칸 하나에만 쌓음
+  for (let c = 0; c < 3; c++) if (F[c] > 1 && !usedC[c]){
+    for (let r = 0; r < 3; r++) if (OCC[r][c] && S[r] >= F[c]){ h[r][c] = Math.max(h[r][c], F[c]); break; }
+  }
+  // 짝이 없는 옆 줄: 앞 높이가 충분한 칸 하나에만 쌓음
+  for (let r = 0; r < 3; r++) if (S[r] > 1 && !usedR[r]){
+    for (let c = 0; c < 3; c++) if (OCC[r][c] && F[c] >= S[r]){ h[r][c] = Math.max(h[r][c], S[r]); break; }
+  }
+  return { h, hl };
+}
+
+/* 풀이에 필요한 값들을 한 번에 계산 */
+function compute(){
+  const sum = a => a.flat().reduce((x, y) => x + y, 0);
+  const k  = OCC.flat().filter(Boolean).length;
+  const AF = OCC.map(row => row.map((o, c) => o ? Math.min(3, F[c]) : 0));  // 앞에서 깎은 뒤 높이
+  const AS = AF.map((row, r) => row.map(v => Math.min(v, S[r])));            // 옆에서도 깎은 뒤 높이 = 최대 배치
+  const mn = minArrangement();
+  return { k, AF, AS, MIN: mn.h, pair: mn.hl, start: 3 * k, nF: sum(AF), maxN: sum(AS), minN: sum(mn.h) };
+}
+
+/* 풀이 단계 수: 최대와 최소가 다르면 '최소' 단계를 하나 더 보여줌 */
+const stepCount = () => (P && P.minN < P.maxN) ? 6 : 5;
+
+/* =========================================================
+   화면 전환: 문제 만들기 ↔ 풀기
+   ========================================================= */
+function openSolve(){
+  const err = validate();
+  if (err){  // 그림이 서로 맞지 않으면 풀기 화면으로 넘어가지 않고 이유를 보여 줌
+    const msg = document.getElementById('msg');
+    msg.className = 'msg bad'; msg.textContent = err;
+    msg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  P = compute();
+  step = 0;
+  document.getElementById('pageMake').hidden = true;
+  document.getElementById('pageSolve').hidden = false;
+  solving = true;
+  window.scrollTo(0, 0);
+  cur = { ...VIEWS.iso }; tgt = { ...VIEWS.iso };   // 카메라를 처음 시점으로
+  renderMini();
+  buildCubes();
+  render();
+}
+function openMake(){
+  solving = false;
+  document.getElementById('pageSolve').hidden = true;
+  document.getElementById('pageMake').hidden = false;
+  update();
+  window.scrollTo(0, 0);
+}
+
+/* 풀기 화면의 작은 문제 그림(읽기 전용) 그리기 */
+function renderMini(){
+  const cell = on => `<div class="mcell${on ? ' on' : ''}"></div>`;
+  let t = '';
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) t += cell(OCC[r][c]);
+  document.getElementById('mvTop').innerHTML = t;
+  const col = (arr, idx) => { let s = ''; for (let lv = 3; lv >= 1; lv--) for (let j = 0; j < 3; j++) s += cell(arr[idx(j)] >= lv); return s; };
+  document.getElementById('mvFront').innerHTML = col(F, i => i);
+  document.getElementById('mvRight').innerHTML = col(S, j => 2 - j);
+  // 그림 아래 한 줄 설명: 높이를 숫자로 함께 보여 줌
+  document.getElementById('hFront').textContent = `왼쪽부터 ${F.join(', ')}`;
+  document.getElementById('hRight').textContent = `앞 줄부터 ${S[2]}, ${S[1]}, ${S[0]}`;
+}
+
+/* =========================================================
+   단계별 설명 문장
+   ========================================================= */
+function caption(){
+  const rv = [S[2], S[1], S[0]].join(', ');  // 오른쪽 그림은 왼쪽(앞 줄)부터
+  const d1 = P.start - P.nF, d2 = P.nF - P.maxN;
+  switch (step){
+    case 0: return `① 위에서 본 ${P.k}칸에 일단 모두 3층씩 쌓아요. ${P.k} × 3 = ${P.start}개. 칸마다 '3'을 적은 것과 같아요.`;
+    case 1: return d1 > 0
+      ? `② 앞에서 봐요. 앞 모양은 왼쪽부터 ${F.join(', ')}. 그보다 위로 튀어나온 빨간 ${d1}개는 있으면 안 돼요.`
+      : `② 앞에서 봐요. 앞 모양은 왼쪽부터 ${F.join(', ')}. 튀어나온 것이 없어서 지울 게 없어요.`;
+    case 2: return `지우면 ${P.nF}개. 칸 숫자 = 3과 앞 숫자 중 작은 수 → 결국 '앞 숫자'가 돼요.`;
+    case 3: return d2 > 0
+      ? `③ 오른쪽에서 봐요. 오른쪽 모양은 왼쪽(앞 줄)부터 ${rv}. 튀어나온 빨간 ${d2}개를 찾아요.`
+      : `③ 오른쪽에서 봐요. 오른쪽 모양은 왼쪽(앞 줄)부터 ${rv}. 튀어나온 것이 없어요.`;
+    case 4: return P.minN === P.maxN
+      ? `남은 것은 ${P.maxN}개. 칸 숫자 = 앞 숫자와 옆 숫자 중 작은 수. 이 문제는 답이 하나로 정해져요.`
+      : `남은 것은 ${P.maxN}개. 이것이 가장 많이 쌓은 경우(최대)예요. 다음 단계에서 최소도 볼게요.`;
+    case 5: return `④ 최소: 앞 숫자와 옆 숫자가 같은 줄끼리 주황 칸 하나에서 짝지어 한 번에 맞추고, 나머지 칸은 1개씩만 놓아요. → ${P.minN}개.`;
+  }
+}
+
+/* 각 쌓기나무(칸 r,c의 z층)가 지금 단계에서 어떤 상태인지
+   keep=남김, mark=지울 것(빨강), min=최소 배치에서 높이 쌓은 칸(주황), gone=없음 */
+function cubeState(r, c, z){
+  if (!P || !OCC[r][c]) return 'gone';
+  switch (step){
+    case 0: return 'keep';
+    case 1: return z < P.AF[r][c] ? 'keep' : 'mark';
+    case 2: return z < P.AF[r][c] ? 'keep' : 'gone';
+    case 3: return z < P.AS[r][c] ? 'keep' : (z < P.AF[r][c] ? 'mark' : 'gone');
+    case 4: return z < P.AS[r][c] ? 'keep' : 'gone';
+    case 5: return z < P.MIN[r][c] ? (P.MIN[r][c] > 1 ? 'min' : 'keep') : 'gone';
+  }
+}
+
+/* =========================================================
+   숫자 쓰기 세 패널 그리기
+   ========================================================= */
+const ST_OK   = 'background:var(--ok-bg);color:var(--ok-text);border:1px solid var(--ok-line)';
+const ST_BAD  = 'background:var(--bad-bg);color:var(--bad-text);border:1px solid var(--bad-line)';
+const ST_WARN = 'background:var(--warn-bg);color:var(--warn-text);border:1px solid var(--warn-line)';
+const ST_NO   = 'border:1px dashed var(--line2)';
+
+/* 바깥 숫자(앞=아래, 옆=오른쪽) 한 칸 */
+function outLabel(v, show, hi, kind){
+  const col = kind === 'f' ? 'var(--warn-text)' : 'var(--pro-text)';
+  const bg  = kind === 'f' ? 'var(--warn-bg)'   : 'var(--pro-bg)';
+  return `<div class="lb" style="${hi ? 'background:' + bg + ';' : ''}color:${show ? col : 'var(--muted)'}">${show ? v : ''}</div>`;
+}
+/* 3x3 칸 + 오른쪽 옆 숫자 + 아래 앞 숫자로 이루어진 4x4 격자 */
+function gridHTML(cellFn, showF, showS, hiF, hiS){
+  let h = '';
+  for (let r = 0; r < 3; r++){
+    for (let c = 0; c < 3; c++){ const [t, st] = cellFn(r, c); h += `<div class="cl" style="${st}">${t}</div>`; }
+    h += outLabel(S[r], showS, hiS, 's');
+  }
+  for (let c = 0; c < 3; c++) h += outLabel(F[c], showF, hiF, 'f');
+  return h + '<div></div>';
+}
+function renderPanels(){
+  // ① 칸 확인: 위 모양 칸마다 3
+  document.getElementById('g1').innerHTML = gridHTML((r, c) => OCC[r][c] ? ['3', ST_OK] : ['', ST_NO], false, false);
+  document.getElementById('s1').textContent = `칸마다 3층씩 = ${P.start}개`;
+
+  // ② 숫자 적기: 앞 숫자는 1단계부터, 옆 숫자는 3단계부터 나타남
+  document.getElementById('g2').innerHTML = gridHTML((r, c) => OCC[r][c] ? ['', ST_OK] : ['', ST_NO],
+    step >= 1, step >= 3, step === 1, step === 3);
+  document.getElementById('s2').textContent = step === 0 ? '아직 안 봤어요' : step < 3 ? '아래 = 앞 높이' : '아래 = 앞, 오른쪽 = 옆';
+
+  // ③ 작은 수 적기: 단계에 따라 칸 숫자가 바뀜 (줄어드는 칸은 "3→1"처럼 빨강)
+  document.getElementById('g3').innerHTML = gridHTML((r, c) => {
+    if (!OCC[r][c]) return ['', ST_NO];
+    const af = P.AF[r][c], as = P.AS[r][c];
+    switch (step){
+      case 0: return ['3', ST_OK];
+      case 1: return af < 3 ? [`3→${af}`, ST_BAD] : ['3', ST_OK];
+      case 2: return [String(af), ST_OK];
+      case 3: return as < af ? [`${af}→${as}`, ST_BAD] : [String(af), ST_OK];
+      case 4: return [String(as), ST_OK];
+      case 5: return [String(P.MIN[r][c]), P.MIN[r][c] > 1 ? ST_WARN : ST_OK];
+    }
+  }, step >= 1, step >= 3, false, false);
+
+  // ③ 아래 덧셈식: 지금 단계가 끝났을 때의 칸 숫자들을 더함
+  const pick = [() => 3, (r, c) => P.AF[r][c], (r, c) => P.AF[r][c], (r, c) => P.AS[r][c], (r, c) => P.AS[r][c], (r, c) => P.MIN[r][c]][step];
+  const vals = [];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) if (OCC[r][c]) vals.push(pick(r, c));
+  document.getElementById('s3').textContent = vals.join('+') + ' = ' + vals.reduce((a, b) => a + b, 0) + '개';
+
+  // 지금 단계에 해당하는 패널에 테두리 표시
+  const panelOf = [1, 2, 3, 2, 3, 3];
+  [1, 2, 3].forEach(i => document.getElementById('p' + i).classList.toggle('on', panelOf[step] === i));
+}
+
+/* =========================================================
+   풀기 화면 전체 갱신 (단계 이동 시)
+   ========================================================= */
+function render(){
+  if (!P) return;
+  // 3D 쌓기나무 상태 반영 (3D가 없어도 개수는 같은 규칙으로 셈)
+  let n = 0, del = 0;
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) for (let z = 0; z < 3; z++){
+    const s = cubeState(r, c, z); if (s !== 'gone') n++; if (s === 'mark') del++;
+  }
+  cubes.forEach(k => {
+    const s = cubeState(k.r, k.c, k.z);
+    k.target = s === 'gone' ? 0 : s === 'mark' ? 0.75 : 1;
+    k.color = s === 'mark' ? 'red' : s === 'min' ? 'amber' : 'teal';
+  });
+  applyColors();
+  document.getElementById('cnt').textContent = n;
+  document.getElementById('del').textContent = del;
+  document.getElementById('cap').textContent = caption();
+  document.getElementById('dots').textContent = Array.from({ length: stepCount() }, (_, i) => i === step ? '●' : '○').join(' ');
+
+  // 지금 보고 있는 방향의 문제 그림에 테두리 표시
+  const viewOf = ['vTop', 'vFront', '', 'vRight', '', ''];
+  ['vTop', 'vFront', 'vRight'].forEach(id => document.getElementById(id).classList.toggle('on', viewOf[step] === id));
+
+  // 3D 카메라를 단계에 맞는 방향으로 이동
+  const camOf = ['iso', 'front', 'iso', 'right', 'iso', 'iso'];
+  setCamera(camOf[step]);
+
+  renderPanels();
+
+  // 정답은 마지막 단계에서 공개 (그 전에는 직접 생각해 보도록)
+  const sum = document.getElementById('sum');
+  const last = step === stepCount() - 1;
+  sum.classList.toggle('wait', !last);
+  sum.textContent = !last ? '마지막 단계에서 정답이 나와요'
+    : P.minN === P.maxN ? `정답: ${P.maxN}개` : `정답: 최소 ${P.minN}개 ~ 최대 ${P.maxN}개`;
+  document.getElementById('bNext').textContent = last ? '처음부터 ↺' : '다음 →';
+}
+/* 다음 단계로. 마지막 단계에서 누르면 처음으로 돌아감 */
+function go(d){
+  if (!P) return;
+  if (d > 0 && step === stepCount() - 1) step = 0;
+  else step = Math.max(0, Math.min(stepCount() - 1, step + d));
+  render();
+}
+
+/* =========================================================
+   3D 장면 (three.js)
+   - 칸 (r,c)의 z층 쌓기나무 중심 = (c-1, z+0.5, r-1)
+   - +z 방향이 앞(보는 사람 쪽), +x 방향이 오른쪽
+   ========================================================= */
+const has3D = typeof THREE !== 'undefined';
+const wrap = document.getElementById('wrap');
+let scene, camera, renderer, cubeGroup, geo, edgeGeo;
+let cubes = [];
+const COLORS = {
+  teal:  { face: 0x5DCAA5, edge: 0x085041 },
+  red:   { face: 0xE24B4A, edge: 0x791F1F },
+  amber: { face: 0xEF9F27, edge: 0x633806 }
+};
+// 카메라 시점: th=좌우 회전각, ph=위에서 내려다보는 각(0=바로 위), r=거리, fov=화각, ty=바라보는 높이
+const VIEWS = {
+  iso:   { th: 0.62, ph: 0.98, r: 11, fov: 35, ty: 1.2 },
+  front: { th: 0, ph: Math.PI / 2, r: 22, fov: 17, ty: 1.5 },
+  right: { th: Math.PI / 2, ph: Math.PI / 2, r: 22, fov: 17, ty: 1.5 }
+};
+let cur = { ...VIEWS.iso }, tgt = { ...VIEWS.iso };
+const floorLabels = {};   // 바닥 글자 스프라이트 (앞/뒤/오른쪽)
+/* 카메라 목표 시점 바꾸기.
+   정면·오른쪽에서 볼 때는 카메라 바로 앞에 있는 바닥 글자가 쌓기나무를 가리므로 숨김 */
+function setCamera(v){
+  tgt = { ...VIEWS[v] };
+  if (floorLabels['앞']) floorLabels['앞'].visible = v !== 'front';
+  if (floorLabels['오른쪽']) floorLabels['오른쪽'].visible = v !== 'right';
+}
+
+/* 바닥 글자(앞/뒤/오른쪽) 스프라이트 만들기 */
+function makeLabel(txt, w){
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = 96;
+  const g = cv.getContext('2d');
+  g.fillStyle = 'rgba(255,255,255,0.92)'; g.strokeStyle = '#444441'; g.lineWidth = 3; g.beginPath();
+  if (g.roundRect) g.roundRect(4, 8, w - 8, 80, 20); else g.rect(4, 8, w - 8, 80);
+  g.fill(); g.stroke();
+  g.fillStyle = '#2C2C2A'; g.font = '600 46px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(txt, w / 2, 50);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
+  sp.scale.set(0.42 * w / 96, 0.42, 1);
+  return sp;
+}
+
+function init3D(){
+  if (!has3D){
+    wrap.innerHTML = '<div class="nogl">3D 화면을 불러오지 못했어요. 인터넷에 연결된 상태에서 다시 열어 주세요. 숫자 풀이는 그대로 쓸 수 있어요.</div>';
+    return;
+  }
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));  // 태블릿 성능을 위해 최대 2배
+  renderer.domElement.style.display = 'block';
+  wrap.appendChild(renderer.domElement);
+
+  // 조명: 면마다 밝기가 달라 입체감이 생기도록 방향광 두 개
+  scene.add(new THREE.AmbientLight(0xffffff, 0.62));
+  const d1 = new THREE.DirectionalLight(0xffffff, 0.55); d1.position.set(4, 7, 5); scene.add(d1);
+  const d2 = new THREE.DirectionalLight(0xffffff, 0.2);  d2.position.set(-5, 3, -2); scene.add(d2);
+
+  // 바닥판과 3x3 격자선
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(3, 3),
+    new THREE.MeshBasicMaterial({ color: 0xB4B2A9, transparent: true, opacity: 0.3 }));
+  floor.rotation.x = -Math.PI / 2; scene.add(floor);
+  const lineMat = new THREE.LineBasicMaterial({ color: 0x888780 });
+  for (let i = 0; i <= 3; i++){
+    const a = -1.5 + i;
+    [[[-1.5, 0.001, a], [1.5, 0.001, a]], [[a, 0.001, -1.5], [a, 0.001, 1.5]]].forEach(p =>
+      scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(p.map(v => new THREE.Vector3(...v))), lineMat)));
+  }
+  // 방향 글자
+  [['앞', [0, 0.25, 2.25], 140], ['뒤', [0, 0.25, -2.25], 140], ['오른쪽', [2.55, 0.25, 0], 210]]
+    .forEach(([s, p, w]) => { const l = makeLabel(s, w); l.position.set(...p); scene.add(l); floorLabels[s] = l; });
+
+  geo = new THREE.BoxGeometry(0.97, 0.97, 0.97);
+  edgeGeo = new THREE.EdgesGeometry(geo);
+  cubeGroup = new THREE.Group(); scene.add(cubeGroup);
+
+  // 손가락/마우스로 끌어서 돌리기
+  let drag = null;
+  wrap.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; wrap.setPointerCapture(e.pointerId); wrap.style.cursor = 'grabbing'; });
+  wrap.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag = { x: e.clientX, y: e.clientY };
+    if (tgt.r > 12){   // 정면/옆 보기 중이면 입체 보기로 풀어주고 바닥 글자를 다시 보임
+      tgt = { ...VIEWS.iso, th: cur.th, ph: cur.ph };
+      Object.values(floorLabels).forEach(l => l.visible = true);
+    }
+    tgt.th -= dx * 0.01;
+    tgt.ph = Math.min(1.55, Math.max(0.05, tgt.ph - dy * 0.01));
+    cur.th = tgt.th; cur.ph = tgt.ph;
+  });
+  const end = () => { drag = null; wrap.style.cursor = 'grab'; };
+  wrap.addEventListener('pointerup', end); wrap.addEventListener('pointercancel', end);
+
+  // 화면 크기가 바뀌면(회전, 화면 전환 등) 캔버스 크기 맞추기
+  const resize = () => {
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+  };
+  new ResizeObserver(resize).observe(wrap); resize();
+
+  // 매 프레임: 카메라와 투명도를 목표값으로 부드럽게 이동 (풀기 화면이 보일 때만 그림)
+  const loop = () => {
+    requestAnimationFrame(loop);
+    if (!solving) return;
+    for (const k in cur) cur[k] += (tgt[k] - cur[k]) * 0.12;
+    cubes.forEach(k => {
+      k.op += (k.target - k.op) * 0.15;
+      k.mesh.material.opacity = k.op; k.edge.material.opacity = k.op;
+      const v = k.op > 0.02; k.mesh.visible = v; k.edge.visible = v;
+    });
+    camera.fov = cur.fov; camera.updateProjectionMatrix();
+    camera.position.set(
+      cur.r * Math.sin(cur.ph) * Math.sin(cur.th),
+      cur.ty + cur.r * Math.cos(cur.ph),
+      cur.r * Math.sin(cur.ph) * Math.cos(cur.th));
+    camera.lookAt(0, cur.ty, 0);
+    renderer.render(scene, camera);
+  };
+  loop();
+}
+
+/* 문제를 풀기 시작할 때 쌓기나무를 새로 만듦: 위 모양 칸마다 3층씩 */
+function buildCubes(){
+  if (!has3D){ cubes = []; return; }
+  cubes.forEach(k => { cubeGroup.remove(k.mesh); cubeGroup.remove(k.edge); k.mesh.material.dispose(); k.edge.material.dispose(); });
+  cubes = [];
+  if (!P) return;
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) if (OCC[r][c]) for (let z = 0; z < 3; z++){
+    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: COLORS.teal.face, transparent: true, opacity: 0 }));
+    mesh.position.set(c - 1, z + 0.5, r - 1);
+    const edge = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: COLORS.teal.edge, transparent: true, opacity: 0 }));
+    edge.position.copy(mesh.position);
+    cubeGroup.add(mesh); cubeGroup.add(edge);
+    cubes.push({ r, c, z, mesh, edge, op: 0, target: 1, color: 'teal' });
+  }
+}
+/* 상태에 맞게 색 바꾸기 */
+function applyColors(){
+  if (!has3D) return;
+  cubes.forEach(k => { k.mesh.material.color.setHex(COLORS[k.color].face); k.edge.material.color.setHex(COLORS[k.color].edge); });
+}
+
+/* =========================================================
+   버튼 연결 및 시작
+   ========================================================= */
+document.getElementById('bEx1').onclick = () => load(EX1);
+document.getElementById('bEx2').onclick = () => load(EX2);
+document.getElementById('bRand').onclick = randomProblem;
+document.getElementById('bClear').onclick = () => { OCC = [[0,0,0],[0,0,0],[0,0,0]].map(r => r.map(Boolean)); F = [0,0,0]; S = [0,0,0]; update(); };
+document.getElementById('bSolve').onclick = openSolve;
+document.getElementById('bBack').onclick = openMake;
+document.getElementById('bRand2').onclick = () => { randomProblem(); openSolve(); };   // 풀기 화면에서 바로 새 문제
+document.getElementById('bPrev').onclick = () => go(-1);
+document.getElementById('bNext').onclick = () => go(1);
+
+init3D();
+load(EX1);   // 처음에는 예제 1이 들어 있는 문제 만들기 화면으로 시작
+</script>
+</body>
+</html>

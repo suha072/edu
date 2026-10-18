@@ -1,0 +1,36 @@
+# main 브랜치에 push하면 교재 목록을 새로 만들어 GitHub Pages에 배포한다.
+name: GitHub Pages 배포
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 배포가 겹치면 나중에 시작한 배포가 앞의 배포가 끝날 때까지 기다린다.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # 목록에 교재를 처음 올린 날짜를 보여 주려면 git 전체 이력이 필요하다.
+          fetch-depth: 0
+      - uses: actions/configure-pages@v5
+      - run: python3 scripts/build_site.py
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
