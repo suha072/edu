@@ -124,6 +124,10 @@ button.primary{background:var(--accent-fill);color:var(--on-accent);border-color
 /* "3층 → 1층"처럼 바뀌는 칸: 위에 지운 높이(취소선), 아래에 새 높이 */
 .tr{display:flex;flex-direction:column;align-items:center;line-height:1.05;font-size:max(10px,calc(var(--nc) * 0.31))}
 .tr s{font-weight:500;opacity:.75}
+/* 아직 모르는 칸: 위에 "?층", 아래에 작게 가능한 범위 "1~3층" */
+.q{display:flex;flex-direction:column;align-items:center;line-height:1.05;white-space:nowrap}
+.q b{font-size:max(11px,calc(var(--nc) * 0.36))}
+.q small{font-size:max(9px,calc(var(--nc) * 0.27));font-weight:500}
 /* 바깥 숫자 "최대 / 3층" 두 줄 표기 */
 .mx{display:flex;flex-direction:column;align-items:center;line-height:1.05;white-space:nowrap}
 .mx small{font-size:max(10px,calc(var(--nc) * 0.29));font-weight:500}
@@ -421,6 +425,45 @@ function minArrangement(){
   return { h, hl };
 }
 
+/* =========================================================
+   칸마다 '가능한 층 범위' 구하기
+   - 위 모양 칸마다 1~3층을 모두 대입해 보고(최대 3^9 = 19,683가지)
+     지금까지 알고 있는 그림(useF=앞, useS=오른쪽)과 맞는 경우만 모아서
+     칸별로 가능한 가장 낮은 층(lo)과 가장 높은 층(hi)을 구함
+   - lo === hi 이면 그 칸의 층이 하나로 정해진 것
+   ========================================================= */
+function possibleRange(useF, useS){
+  const cells = [];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) if (OCC[r][c]) cells.push([r, c]);
+  const lo = [[9,9,9],[9,9,9],[9,9,9]], hi = [[0,0,0],[0,0,0],[0,0,0]];
+  const h  = [[0,0,0],[0,0,0],[0,0,0]];
+  const rec = i => {
+    if (i === cells.length){
+      // 알고 있는 그림과 맞는지 확인: 세로줄 최고 높이 = 앞 숫자, 가로줄 최고 높이 = 옆 숫자
+      if (useF) for (let c = 0; c < 3; c++) if (Math.max(h[0][c], h[1][c], h[2][c]) !== F[c]) return;
+      if (useS) for (let r = 0; r < 3; r++) if (Math.max(...h[r]) !== S[r]) return;
+      for (const [r, c] of cells){ lo[r][c] = Math.min(lo[r][c], h[r][c]); hi[r][c] = Math.max(hi[r][c], h[r][c]); }
+      return;
+    }
+    const [r, c] = cells[i];
+    for (let v = 1; v <= 3; v++){ h[r][c] = v; rec(i + 1); }
+    h[r][c] = 0;
+  };
+  rec(0);
+  return OCC.map((row, r) => row.map((o, c) => o ? { lo: lo[r][c], hi: hi[r][c] } : null));
+}
+/* 범위 표에서 정해진 칸 수(d)와 아직 모르는 칸 수(u), 모르는 칸의 범위 목록(ranges) */
+function rangeInfo(R){
+  let d = 0, u = 0; const ranges = [];
+  R.flat().forEach(x => {
+    if (!x) return;
+    if (x.lo === x.hi) d++;
+    else { u++; const t = `${x.lo}~${x.hi}층`; if (!ranges.includes(t)) ranges.push(t); }
+  });
+  ranges.sort().reverse();   // "1~3층"을 "1~2층"보다 먼저
+  return { d, u, ranges };
+}
+
 /* 풀이에 필요한 값들을 한 번에 계산 */
 function compute(){
   const sum = a => a.flat().reduce((x, y) => x + y, 0);
@@ -430,7 +473,9 @@ function compute(){
   const AS = AF.map((row, r) => row.map(v => Math.min(v, S[r])));            // 옆에서도 깎은 뒤 높이 = 최대 배치
   const mn = minArrangement();
   return { k, AF, AS, MIN: mn.h, pair: mn.hl, start: 3 * k, nF: sum(AF), maxN: sum(AS), minN: sum(mn.h),
-           n2: cnt(AS, 2), n3: cnt(AS, 3) };   // 쌓아 올리기: 2층·3층에 올릴 수 있는 개수
+           n2: cnt(AS, 2), n3: cnt(AS, 3),     // 쌓아 올리기: 2층·3층에 올릴 수 있는 개수
+           rangeF: possibleRange(true, false),  // 앞 그림만 알 때 칸별 가능한 층
+           rangeFS: possibleRange(true, true) }; // 앞·오른쪽 그림을 모두 알 때 칸별 가능한 층
 }
 
 /* =========================================================
@@ -487,8 +532,19 @@ function caption(){
   if (mode === 'build'){
     switch (step){
       case 0: return `① 위에서 본 ${P.k}칸에 1층을 하나씩 깔아요. 지금 ${P.k}개. 위 모양은 '어디에 놓는지'만 알려 줘요.`;
-      case 1: return `② 앞에서 본 모양이 공개됐어요. 왼쪽부터 ${F.join(', ')}. 세로줄마다 이 높이보다 높이 쌓을 수 없어요. 아래에 적어요.`;
-      case 2: return `오른쪽에서 본 모양이 공개됐어요. 앞 줄부터 ${rv}. 가로줄마다 이 높이보다 높이 쌓을 수 없어요. 오른쪽에 적어요.`;
+      case 1: {
+        const I = rangeInfo(P.rangeF);
+        const head = `② 앞에서 본 모양이 공개됐어요. 왼쪽부터 ${F.join(', ')}. `;
+        if (!I.u) return head + `이것만으로 모든 칸의 층이 정해졌어요.`;
+        return head + `층이 정해진 칸${I.d ? ` ${I.d}개` : '은 없고'}${I.d ? '는 층을 적고,' : ','} 모르는 칸 ${I.u}개(파란 칸)는 ?층으로 적어요. 앞 모양만으로는 ?층 칸이 ${I.ranges.join(' 또는 ')}까지 가능해요.`;
+      }
+      case 2: {
+        const A = rangeInfo(P.rangeF), I = rangeInfo(P.rangeFS);
+        const head = `오른쪽에서 본 모양이 공개됐어요. 앞 줄부터 ${rv}. `;
+        const more = I.d > A.d ? `정해진 칸이 ${A.d}개에서 ${I.d}개로 늘었어요(?가 초록 숫자로 바뀐 칸). ` : '';
+        if (!I.u) return head + more + `이제 모든 칸의 층이 정해졌어요.`;
+        return head + more + `아직 모르는 칸 ${I.u}개(파란 칸)는 ${I.ranges.join(' 또는 ')}까지 가능해요.`;
+      }
       case 3: return P.n2 > 0
         ? `③ 2층 올리기: 앞 숫자와 옆 숫자가 둘 다 2 이상인 칸에만 올릴 수 있어요. 주황색 ${P.n2}개를 올려요.`
         : `③ 2층 올리기: 앞 숫자와 옆 숫자가 둘 다 2 이상인 칸이 없어서 2층은 없어요.`;
@@ -588,6 +644,7 @@ const ST_OK   = 'background:var(--ok-bg);color:var(--ok-text);border:1px solid v
 const ST_BAD  = 'background:var(--bad-bg);color:var(--bad-text);border:1px solid var(--bad-line)';
 const ST_WARN = 'background:var(--warn-bg);color:var(--warn-text);border:1px solid var(--warn-line)';
 const ST_NO   = 'border:1px dashed var(--line2)';
+const ST_Q    = 'background:var(--accent-bg);color:var(--accent);border:1px dashed var(--accent)';   // 아직 모르는 칸(?층)
 const fl = n => `${n}층`;                                                        // 칸 안 높이 표기: "3층"
 const change = (a, b) => `<span class="tr"><s>${fl(a)}</s><span>${fl(b)}</span></span>`;  // "3층 → 1층" (위: 지운 높이)
 
@@ -625,8 +682,25 @@ function renderPanels(){
   // ② 숫자 적기: 앞·오른쪽 그림이 공개될 때 바깥 숫자가 나타남 (공개된 단계에는 배경 강조)
   const fOn = revF(), sOn = revS();
   const hiF = step === 1, hiS = build ? step === 2 : step === 3;
-  document.getElementById('g2').innerHTML = gridHTML((r, c) => OCC[r][c] ? ['', ST_OK] : ['', ST_NO], fOn, sOn, hiF, hiS);
-  document.getElementById('s2').textContent = !fOn ? '아직 몰라요' : !sOn ? '아래 = 앞에서 본 최대' : '바깥 = 최대 높이';
+  let cell2 = (r, c) => OCC[r][c] ? ['', ST_OK] : ['', ST_NO];
+  if (build && fOn){
+    // 쌓아 올리기: 지금까지 공개된 그림으로 칸마다 가능한 층을 적음
+    //   정해진 칸 → "1층", 아직 모르는 칸 → "?층" + 아래에 작게 가능한 범위 "1~3층"
+    const R = sOn ? P.rangeFS : P.rangeF;
+    cell2 = (r, c) => {
+      const x = R[r][c];
+      if (!x) return ['', ST_NO];
+      if (x.lo === x.hi) return [fl(x.lo), ST_OK];
+      return [`<span class="q"><b>?층</b><small>${x.lo}~${x.hi}층</small></span>`, ST_Q];
+    };
+  }
+  document.getElementById('g2').innerHTML = gridHTML(cell2, fOn, sOn, hiF, hiS);
+  if (build && fOn){
+    const I = rangeInfo(sOn ? P.rangeFS : P.rangeF);
+    document.getElementById('s2').textContent = I.u ? `정해짐 ${I.d}칸 · ?층 ${I.u}칸` : '모든 칸이 정해졌어요';
+  } else {
+    document.getElementById('s2').textContent = !fOn ? '아직 몰라요' : !sOn ? '아래 = 앞에서 본 최대' : '바깥 = 최대 높이';
+  }
 
   // ③ 단계에 따라 칸 높이가 바뀜
   let cellFn, heightOf;
@@ -688,14 +762,18 @@ function render(){
     if (s === 'mark' || s === 'new') extra++;
   }
   // 3D 쌓기나무 상태 반영
+  const R = currentRange();   // 쌓아 올리기 2·3단계: 칸별 가능한 층
   cubes.forEach(k => {
     const s = cubeState(k.r, k.c, k.z);
     const target = s === 'gone' ? 0 : s === 'mark' ? 0.75 : 1;
     if (build && k.target === 0 && target > 0) k.dy = 1.6;   // 쌓아 올리기: 새로 생긴 쌓기나무는 위에서 떨어지듯 내려옴
     k.target = target;
     k.color = s === 'mark' ? 'red' : (s === 'new' || s === 'min') ? 'amber' : 'teal';
+    // 층을 아직 모르는 칸(?층)은 1층 블록을 파란색으로
+    if (R && R[k.r][k.c] && R[k.r][k.c].lo !== R[k.r][k.c].hi && s !== 'gone') k.color = 'blue';
   });
   applyColors();
+  buildMarkers();
   document.getElementById('lCnt').textContent = build ? '쌓은 개수' : '남은 개수';
   document.getElementById('lDel').textContent = build ? '새로 올린 개수' : '지울 개수';
   document.getElementById('cnt').textContent = n;
@@ -748,8 +826,17 @@ let cubes = [];
 const COLORS = {
   teal:  { face: 0x5DCAA5, edge: 0x085041 },
   red:   { face: 0xE24B4A, edge: 0x791F1F },
-  amber: { face: 0xEF9F27, edge: 0x633806 }
+  amber: { face: 0xEF9F27, edge: 0x633806 },
+  blue:  { face: 0x85B7EB, edge: 0x185FA5 }   // 층을 아직 모르는 칸의 1층 블록 (숫자 패널의 ?층 칸과 같은 파란색)
 };
+/* '?층' 표시용 3D 물음표
+   - qGroup: 물음표와 '가능한 층' 점선 상자를 담는 그룹
+   - markers: 칸마다 { sprite, hi } (hi = 가능한 가장 높은 층) */
+let qGroup, qTexture, ghostMat;
+let markers = [];
+/* 층이 정해진 칸 표시용: 1~3층 배지 그림(fixTextures[n])과 초록 테두리 재질 */
+const fixTextures = {};
+let fixGhostMat;
 // 카메라 시점: th=좌우 회전각, ph=위에서 내려다보는 각(0=바로 위), r=거리, fov=화각, ty=바라보는 높이
 const VIEWS = {
   iso:   { th: 0.62, ph: 0.98, r: 11, fov: 35, ty: 1.2 },
@@ -815,6 +902,29 @@ function init3D(){
   edgeGeo = new THREE.EdgesGeometry(geo);
   cubeGroup = new THREE.Group(); scene.add(cubeGroup);
 
+  // 물음표 그림(파란 원 + 흰 ?)을 한 번만 만들어 모든 물음표가 같이 씀
+  const qc = document.createElement('canvas'); qc.width = qc.height = 128;
+  const qg = qc.getContext('2d');
+  qg.fillStyle = '#378ADD'; qg.beginPath(); qg.arc(64, 64, 58, 0, Math.PI * 2); qg.fill();
+  qg.lineWidth = 6; qg.strokeStyle = '#ffffff'; qg.stroke();
+  qg.fillStyle = '#ffffff'; qg.font = '700 84px sans-serif'; qg.textAlign = 'center'; qg.textBaseline = 'middle';
+  qg.fillText('?', 64, 70);
+  qTexture = new THREE.CanvasTexture(qc);
+  // '여기까지 쌓일 수도 있다'는 자리를 보여 주는 옅은 파란 테두리 상자
+  ghostMat = new THREE.LineBasicMaterial({ color: 0x378ADD, transparent: true, opacity: 0.45 });
+  // 층이 정해진 칸: 초록 원 안에 "3층" 배지 + 그 높이까지 초록 테두리 상자
+  for (let n = 1; n <= 3; n++){
+    const bc = document.createElement('canvas'); bc.width = bc.height = 128;
+    const bg = bc.getContext('2d');
+    bg.fillStyle = '#1D9E75'; bg.beginPath(); bg.arc(64, 64, 58, 0, Math.PI * 2); bg.fill();
+    bg.lineWidth = 6; bg.strokeStyle = '#ffffff'; bg.stroke();
+    bg.fillStyle = '#ffffff'; bg.font = '700 50px sans-serif'; bg.textAlign = 'center'; bg.textBaseline = 'middle';
+    bg.fillText(`${n}층`, 64, 67);
+    fixTextures[n] = new THREE.CanvasTexture(bc);
+  }
+  fixGhostMat = new THREE.LineBasicMaterial({ color: 0x1D9E75, transparent: true, opacity: 0.6 });
+  qGroup = new THREE.Group(); scene.add(qGroup);
+
   // 손가락/마우스로 끌어서 돌리기
   let drag = null;
   wrap.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; wrap.setPointerCapture(e.pointerId); wrap.style.cursor = 'grabbing'; });
@@ -852,6 +962,21 @@ function init3D(){
       k.mesh.position.y = k.z + 0.5 + k.dy; k.edge.position.y = k.mesh.position.y;
       const v = k.op > 0.02; k.mesh.visible = v; k.edge.visible = v;
     });
+    // 물음표가 2층 자리 ↔ 가능한 가장 높은 층 자리 사이를 천천히 오르내림 (한 번 왕복 1.8초)
+    //   가능한 층이 1~2층뿐이면 2층 자리에서 살짝 위아래로 흔들림
+    const t = (Math.sin(performance.now() / 1800 * Math.PI * 2) + 1) / 2;   // 0~1 사이를 부드럽게 반복
+    markers.forEach(m => {
+      if (m.kind === 'fix'){
+        // 층이 정해진 칸: 배지가 정해진 층 자리로 미끄러지듯 내려앉고, 작았다가 커지며 나타남
+        m.y += (m.ty - m.y) * 0.08;
+        m.s += (0.62 - m.s) * 0.12;
+        m.sprite.position.y = m.y;
+        m.sprite.scale.set(m.s, m.s, 1);
+        return;
+      }
+      const y2 = 1.5, yTop = m.hi - 0.5;   // 2층 칸의 가운데 높이, 가장 높은 층 칸의 가운데 높이
+      m.sprite.position.y = m.hi > 2 ? y2 + (yTop - y2) * t : y2 + 0.15 * (t * 2 - 1);
+    });
     camera.fov = cur.fov; camera.updateProjectionMatrix();
     camera.position.set(
       cur.r * Math.sin(cur.ph) * Math.sin(cur.th),
@@ -877,6 +1002,64 @@ function buildCubes(){
     edge.position.copy(mesh.position);
     cubeGroup.add(mesh); cubeGroup.add(edge);
     cubes.push({ r, c, z, mesh, edge, op: 0, target: 0, dy: 0, color: 'teal' });
+  }
+}
+/* 쌓아 올리기에서 지금 단계의 '가능한 층 범위' 표 (그림 공개 전이나 층을 올리는 단계에서는 null) */
+function currentRange(){
+  if (!P || mode !== 'build') return null;
+  if (step === 1) return P.rangeF;    // 앞 그림만 앎
+  if (step === 2) return P.rangeFS;   // 앞·오른쪽 그림을 앎
+  return null;
+}
+/* 칸마다 3D 표시를 새로 만듦
+   - 층을 아직 모르는 칸: 파란 물음표(오르내림) + '가능한 층' 파란 테두리 상자
+   - 층이 정해진 칸: 초록 "N층" 배지 + 그 높이까지 초록 테두리 상자
+       · 2층 이상으로 정해진 칸 (1층 블록만으로는 높이가 안 보이므로)
+       · 앞 단계에서 ?였다가 이번에 정해진 칸 (?가 배지로 바뀌는 모습을 보여 줌) */
+function buildMarkers(){
+  if (!has3D) return;
+  while (qGroup.children.length){
+    const o = qGroup.children[0];
+    qGroup.remove(o);
+    if (o.isSprite) o.material.dispose();
+  }
+  markers = [];
+  const R = currentRange();
+  if (!R) return;
+  const prev = step === 2 ? P.rangeF : null;   // 바로 앞 단계(앞 그림만 알 때)의 범위
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++){
+    const x = R[r][c];
+    if (!x) continue;
+    if (x.lo === x.hi){
+      const wasQ = prev && prev[r][c].lo !== prev[r][c].hi;   // 앞 단계에서는 ?였던 칸
+      if (x.hi === 1 && !wasQ) continue;                     // 처음부터 1층으로 정해진 칸은 표시 생략
+      for (let z = 1; z < x.hi; z++){
+        const g = new THREE.LineSegments(edgeGeo, fixGhostMat);
+        g.position.set(c - 1, z + 0.5, r - 1);
+        qGroup.add(g);
+      }
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: fixTextures[x.hi], depthTest: false, transparent: true }));
+      sp.renderOrder = 10;
+      const ty = x.hi - 0.5;              // 정해진 가장 높은 층 칸의 가운데
+      const y0 = wasQ ? 2.0 : ty;         // ?였던 칸은 ?가 있던 높이에서 출발해 내려앉음
+      sp.position.set(c - 1, y0, r - 1);
+      qGroup.add(sp);
+      markers.push({ kind: 'fix', sprite: sp, y: y0, ty, s: wasQ ? 0.3 : 0.62 });
+      continue;
+    }
+    // 2층부터 가능한 가장 높은 층까지, 비어 있는 자리를 옅은 테두리로 표시
+    for (let z = 1; z < x.hi; z++){
+      const g = new THREE.LineSegments(edgeGeo, ghostMat);
+      g.position.set(c - 1, z + 0.5, r - 1);
+      qGroup.add(g);
+    }
+    // 물음표: 다른 물체에 가려지지 않게 항상 맨 앞에 그림
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: qTexture, depthTest: false, transparent: true }));
+    sp.scale.set(0.55, 0.55, 1);
+    sp.renderOrder = 10;
+    sp.position.set(c - 1, 1.5, r - 1);
+    qGroup.add(sp);
+    markers.push({ kind: 'q', sprite: sp, hi: x.hi });
   }
 }
 /* 상태에 맞게 색 바꾸기 */
